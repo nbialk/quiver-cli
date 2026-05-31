@@ -1,0 +1,25 @@
+{
+  "name": "nb-agents",
+  "version": "0.1.0",
+  "description": "Portable AI agent config: shared .agents/ skills, commands & MCP setup installable into any repo",
+  "type": "module",
+  "bin": {
+    "nb-agents": "bin/cli.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "template"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test:install": "node bin/cli.mjs help"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Snickers03/nb-agents.git"
+  }
+}

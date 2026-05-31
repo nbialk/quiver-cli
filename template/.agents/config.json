@@ -1,0 +1,54 @@
+{
+  "shared": {
+    "devCommand": "pnpm run dev"
+  },
+  "mcpServers": {
+    "playwright": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest", "--isolated"]
+    },
+    "langfuse-docs": {
+      "transport": "http",
+      "url": "https://langfuse.com/api/mcp"
+    },
+    "context7": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@upstash/context7-mcp@latest"]
+    },
+    "neon": {
+      "transport": "http",
+      "url": "https://mcp.neon.tech/mcp",
+      "headers": {
+        "Authorization": "Bearer ${NEON_API_KEY}"
+      }
+    },
+    "vercel": {
+      "transport": "http",
+      "url": "https://mcp.vercel.com"
+    },
+    "notion": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@notionhq/notion-mcp-server"],
+      "env": {
+        "NOTION_TOKEN": "${NOTION_API_KEY}"
+      }
+    }
+  },
+  "claude": {
+    "settings": {
+      "permissions": {
+        "allow": [
+          "Bash(pnpm run:*)",
+          "Bash(pnpm exec:*)",
+          "Bash(gh pr:*)",
+          "Bash(gh release:*)",
+          "Bash(git:*)"
+        ]
+      },
+      "enableAllProjectMcpServers": true
+    }
+  }
+}
