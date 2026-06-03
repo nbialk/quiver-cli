@@ -34,6 +34,14 @@ if (existsSync(envLocalPath)) {
 const sourcePath = resolve(repoRoot, ".agents/config.json");
 const config = JSON.parse(readFileSync(sourcePath, "utf8"));
 const checkMode = process.argv.includes("--check");
+const quietMode = process.argv.includes("--quiet");
+
+// In quiet mode, suppress per-item lines and tally a compact summary instead.
+const counts = { updated: 0, removed: 0, linked: 0 };
+const note = (kind, message) => {
+  if (kind) counts[kind] += 1;
+  if (!quietMode) console.log(message);
+};
 
 // ---------------------------------------------------------------------------
 // Env-var interpolation: replaces "${VAR_NAME}" patterns with process.env
@@ -333,7 +341,7 @@ for (const output of fileOutputs) {
 
   mkdirSync(resolve(output.path, ".."), { recursive: true });
   writeFileSync(output.path, output.content);
-  console.log(`Updated ${output.path}`);
+  note("updated", `Updated ${output.path}`);
 }
 
 // Remove generated MCP files that should no longer exist (no servers left)
@@ -349,7 +357,7 @@ for (const path of removableFileOutputs) {
     continue;
   }
   rmSync(path, { force: true });
-  console.log(`Removed ${path}`);
+  note("removed", `Removed ${path}`);
 }
 
 // Process symlinks
@@ -403,7 +411,7 @@ for (const output of symlinkOutputs) {
     output.path,
     lstatSync(output.target).isDirectory() ? "dir" : "file",
   );
-  console.log(`Linked ${output.path}`);
+  note("linked", `Linked ${output.path}`);
 }
 
 // Clean up stale entries in managed directories
@@ -427,10 +435,19 @@ for (const directory of managedDirectoryEntries) {
   for (const child of unexpectedChildren) {
     const childPath = resolve(directory.path, child);
     removePath(childPath);
-    console.log(`Removed stale generated shim ${childPath}`);
+    note("removed", `Removed stale generated shim ${childPath}`);
   }
 }
 
 if (checkMode && hasMismatch) {
   process.exitCode = 1;
+}
+
+// Compact one-line summary (always printed in quiet mode; useful for spinners).
+if (quietMode && !checkMode) {
+  const parts = [];
+  if (counts.linked) parts.push(`${counts.linked} linked`);
+  if (counts.updated) parts.push(`${counts.updated} generated`);
+  if (counts.removed) parts.push(`${counts.removed} removed`);
+  console.log(parts.length ? parts.join(", ") : "already up to date");
 }
