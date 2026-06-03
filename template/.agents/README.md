@@ -40,6 +40,10 @@ from the canonical files here.
     │                    #   prompt migration, judge calibration (+ references)
     ├── posthog/         # PostHog for Next.js: analytics, LLM analytics,
     │                    #   error tracking, feature flags (+ references)
+    ├── find-skills/     # Discover and install agent skills (npx skills)
+    ├── agent-browser/   # Browser automation CLI for AI agents (Vercel)
+    ├── skill-creator/   # Create, improve, and eval skills (Anthropic)
+    │                    #   (+ agents, scripts, eval-viewer, references)
     └── db-query/        # Ad-hoc Prisma queries
 ```
 
