@@ -28,8 +28,7 @@ from the canonical files here.
     │   │                    #   bolder|quieter|distill|harden|onboard|animate|
     │   │                    #   colorize|typeset|layout|delight|overdrive|clarify|
     │   │                    #   adapt|optimize|init|document|extract|live)
-    │   ├── frontend-design/ # Design quality (+ 7 reference docs)
-    │   └── normalize/       # Design system consistency
+    │   └── frontend-design/ # Design quality (+ 7 reference docs)
     ├── code/            # Code quality skills
     │   ├── build-debug/     # Debug failed CI/CD runs
     │   ├── cleanup/         # Find unused code (knip)
