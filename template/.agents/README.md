@@ -111,6 +111,20 @@ from the canonical files here.
    ```
 3. Restart your AI tool to pick up the new config
 
+#### Configured MCP servers
+
+Defined under `mcpServers` in `.agents/config.json`. Servers needing a
+secret read it from an environment variable (set it in your shell or `.env`).
+
+| Server          | Transport | Source / URL                          | Env var          |
+| --------------- | --------- | ------------------------------------- | ---------------- |
+| `playwright`    | stdio     | `@playwright/mcp` (`--isolated`)      | —                |
+| `langfuse-docs` | http      | `https://langfuse.com/api/mcp`        | —                |
+| `context7`      | stdio     | `@upstash/context7-mcp`               | —                |
+| `neon`          | http      | `https://mcp.neon.tech/mcp`           | `NEON_API_KEY`   |
+| `vercel`        | http      | `https://mcp.vercel.com`              | —                |
+| `notion`        | stdio     | `@notionhq/notion-mcp-server`         | `NOTION_API_KEY` |
+
 ### Remove a command or skill
 
 1. Delete the file or directory under `.agents/commands/` or `.agents/skills/`
