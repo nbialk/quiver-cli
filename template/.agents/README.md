@@ -161,6 +161,8 @@ without a key; add a `CONTEXT7_API_KEY` header for higher rate limits if needed.
 | `.opencode/skills/`           | **Generated** | Symlinks to `.agents/skills/`, gitignored   |
 | `.mcp.json`                   | **Generated** | From `config.json`, gitignored              |
 | `tui.json`                    | **Generated** | From `config.json`, gitignored              |
+| `.env.local.example`          | **Committed** | Secrets template, copy to `.env.local`      |
+| `.env.local`                  | **Manual**    | Your secrets, gitignored — never commit     |
 
 ## Maintenance
 

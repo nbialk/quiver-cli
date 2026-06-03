@@ -4,14 +4,23 @@ import { cpSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 
-import { install, selectMcpServers, templateRoot } from "../lib/install.mjs";
+import {
+  install,
+  selectMcpServers,
+  selectSkills,
+  templateRoot,
+} from "../lib/install.mjs";
 import * as ui from "../lib/ui.mjs";
 
 const args = process.argv.slice(2);
 const command = args[0] || "init";
 const flags = new Set(args.slice(1));
 const force = flags.has("--force") || flags.has("-f");
-const noMcpPrompt = flags.has("--all-mcp") || flags.has("--yes") || flags.has("-y");
+const skipPrompts =
+  flags.has("--all") ||
+  flags.has("--all-mcp") ||
+  flags.has("--yes") ||
+  flags.has("-y");
 const targetRoot = process.cwd();
 
 const HELP = `nb-agents - portable AI agent config (.agents/ skills & commands)
@@ -27,8 +36,8 @@ Commands:
   help      Show this help
 
 Options:
-  -f, --force     Overwrite existing files (init/update)
-  --all-mcp, -y   Keep all MCP servers without prompting (init)
+  -f, --force   Overwrite existing files (init/update)
+  --all, -y     Keep all skills and MCP servers without prompting (init)
 `;
 
 const SYNC_SCRIPT_REL = "scripts/agents/sync-agent-shims.mjs";
@@ -91,7 +100,8 @@ switch (command) {
   case "init": {
     await ui.intro("nb-agents");
     await install(targetRoot, { force });
-    await selectMcpServers(targetRoot, { interactive: !noMcpPrompt });
+    await selectSkills(targetRoot, { interactive: !skipPrompts });
+    await selectMcpServers(targetRoot, { interactive: !skipPrompts });
     const status = await runSyncQuiet();
     if (status === 0) {
       await ui.outro("Done. Restart your AI tool to load the new config.");
