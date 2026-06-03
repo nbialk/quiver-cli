@@ -136,6 +136,13 @@ const fileOutputs = [
     : []),
 ];
 
+// Generated MCP files that must be removed when no servers are configured,
+// so a previous sync's output doesn't linger after all servers are deselected.
+const removableFileOutputs = [
+  ...(mcpJsonContent ? [] : [resolve(repoRoot, ".mcp.json")]),
+  ...(openCodeJsonContent ? [] : [resolve(repoRoot, "opencode.json")]),
+];
+
 // ---------------------------------------------------------------------------
 // Skills (.agents/skills/<name> -> .claude/skills/<name>)
 // ---------------------------------------------------------------------------
@@ -327,6 +334,22 @@ for (const output of fileOutputs) {
   mkdirSync(resolve(output.path, ".."), { recursive: true });
   writeFileSync(output.path, output.content);
   console.log(`Updated ${output.path}`);
+}
+
+// Remove generated MCP files that should no longer exist (no servers left)
+for (const path of removableFileOutputs) {
+  if (!existsSync(path)) {
+    continue;
+  }
+  if (checkMode) {
+    hasMismatch = true;
+    console.error(
+      `Stale generated config: ${path} (no MCP servers configured). Run "pnpm run agents:sync".`,
+    );
+    continue;
+  }
+  rmSync(path, { force: true });
+  console.log(`Removed ${path}`);
 }
 
 // Process symlinks

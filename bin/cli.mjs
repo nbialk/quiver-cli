@@ -4,12 +4,13 @@ import { cpSync, existsSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import process from "node:process";
 
-import { install, templateRoot } from "../lib/install.mjs";
+import { install, selectMcpServers, templateRoot } from "../lib/install.mjs";
 
 const args = process.argv.slice(2);
 const command = args[0] || "init";
 const flags = new Set(args.slice(1));
 const force = flags.has("--force") || flags.has("-f");
+const noMcpPrompt = flags.has("--all-mcp") || flags.has("--yes") || flags.has("-y");
 const targetRoot = process.cwd();
 
 const HELP = `nb-agents - portable AI agent config (.agents/ skills & commands)
@@ -25,7 +26,8 @@ Commands:
   help      Show this help
 
 Options:
-  -f, --force   Overwrite existing files (init/update)
+  -f, --force     Overwrite existing files (init/update)
+  --all-mcp, -y   Keep all MCP servers without prompting (init)
 `;
 
 const SYNC_SCRIPT_REL = "scripts/agents/sync-agent-shims.mjs";
@@ -62,6 +64,7 @@ const copyOnly = () => {
 switch (command) {
   case "init":
     install(targetRoot, { force });
+    await selectMcpServers(targetRoot, { interactive: !noMcpPrompt });
     runSync();
     break;
   case "sync":

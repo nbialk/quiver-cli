@@ -113,8 +113,10 @@ from the canonical files here.
 
 #### Configured MCP servers
 
-Defined under `mcpServers` in `.agents/config.json`. Servers needing a
-secret read it from an environment variable (set it in your shell or `.env`).
+Defined under `mcpServers` in `.agents/config.json`. At `nb-agents init` time you
+are prompted which of these to keep; deselected ones are removed from this file.
+Servers needing a secret read it from an environment variable (set it in your
+shell or `.env`).
 
 | Server          | Transport | Source / URL                          | Env var          |
 | --------------- | --------- | ------------------------------------- | ---------------- |

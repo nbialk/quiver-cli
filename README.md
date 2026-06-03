@@ -17,17 +17,35 @@ This will:
 
 1. Copy `.agents/` (skills, commands, config) into the repo.
 2. Copy `scripts/agents/sync-agent-shims.mjs`.
-3. Wire `agents:sync`, `agents:check`, and `postinstall` into `package.json`.
-4. Add generated provider paths to `.gitignore`.
-5. Run an initial sync to create the `.claude/` and `.opencode/` shims.
+3. Prompt which MCP servers to keep (interactive; skipped when not a TTY).
+4. Wire `agents:sync`, `agents:check`, and `postinstall` into `package.json`.
+5. Add generated provider paths to `.gitignore`.
+6. Run an initial sync to create the `.claude/` and `.opencode/` shims.
 
 Use `--force` to overwrite existing `.agents/` / script files.
+
+### Selecting MCP servers
+
+During `init`, you pick which MCP servers to install. Enter the numbers of the
+servers to keep (comma- or space-separated), `all`, or `none`:
+
+```
+Select MCP servers to install:
+  1) playwright  (npx -y @playwright/mcp@latest --isolated)
+  2) langfuse-docs  (https://langfuse.com/api/mcp)
+  ...
+Enter numbers (comma-separated), 'all', or 'none' [all]:
+```
+
+Deselected servers are stripped from the copied `.agents/config.json`. Pass
+`--all-mcp` (or `-y`) to keep every server without prompting, e.g. in CI. You can
+always re-edit `.agents/config.json` and re-run `npx nb-agents sync` afterward.
 
 ## Commands
 
 | Command                    | Description                                              |
 | -------------------------- | -------------------------------------------------------- |
-| `npx nb-agents init`       | Full setup (copy + wire + sync)                          |
+| `npx nb-agents init`       | Full setup (copy + select MCP + wire + sync)             |
 | `npx nb-agents sync`       | Regenerate provider shims                                |
 | `npx nb-agents check`      | Verify shims are up to date (exit 1 if not, for CI)      |
 | `npx nb-agents update`     | Re-copy `.agents/` + script only (keeps package.json)    |
