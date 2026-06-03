@@ -23,24 +23,13 @@ from the canonical files here.
 │   └── tf-readme.md     # /tf-readme — Terraform README audit
 └── skills/              # Background knowledge (symlinked to .claude/ and .opencode/)
     ├── design/          # UI/UX design skills
-    │   ├── adapt/           # Responsive design adaptation
-    │   ├── animate/         # Animation and micro-interactions
-    │   ├── audit/           # UI quality audit
-    │   ├── bolder/          # Amplify safe designs
-    │   ├── clarify/         # Improve UX copy
-    │   ├── colorize/        # Strategic color additions
-    │   ├── critique/        # Design review and scoring
-    │   ├── delight/         # Add moments of joy
-    │   ├── distill/         # Strip to essence
-    │   ├── extract/         # Extract reusable components
+    │   ├── impeccable/      # Production-grade frontend design + iteration
+    │   │                    #   (/impeccable craft|shape|audit|critique|polish|
+    │   │                    #   bolder|quieter|distill|harden|onboard|animate|
+    │   │                    #   colorize|typeset|layout|delight|overdrive|clarify|
+    │   │                    #   adapt|optimize|init|document|extract|live)
     │   ├── frontend-design/ # Design quality (+ 7 reference docs)
-    │   ├── harden/          # Error handling and resilience
-    │   ├── normalize/       # Design system consistency
-    │   ├── onboard/         # Onboarding flows
-    │   ├── optimize/        # Performance improvements
-    │   ├── polish/          # Final quality pass
-    │   ├── quieter/         # Tone down bold designs
-    │   └── teach-impeccable/ # One-time design context setup
+    │   └── normalize/       # Design system consistency
     ├── code/            # Code quality skills
     │   ├── build-debug/     # Debug failed CI/CD runs
     │   ├── cleanup/         # Find unused code (knip)
