@@ -7,12 +7,6 @@ description: Instrument LLM applications with Langfuse tracing. Use when setting
 
 Instrument LLM applications with Langfuse tracing, following best practices and tailored to your use case.
 
-## When to Use
-
-- Setting up Langfuse in a new project
-- Auditing existing Langfuse instrumentation
-- Adding observability to LLM calls
-
 ## Workflow
 
 ### 1. Assess Current State
@@ -31,14 +25,14 @@ Check the project:
 
 Every trace should have these fundamentals:
 
-| Requirement               | Check                                                                                                                                           | Why                                                               |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
-| Model name                | Is the LLM model captured?                                                                                                                      | Enables model comparison and filtering                            |
-| Token usage               | Are input/output tokens tracked?                                                                                                                | Enables automatic cost calculation                                |
-| Good trace names          | Are names descriptive? (`chat-response`, not `trace-1`)                                                                                         | Makes traces findable and filterable                              |
-| Span hierarchy            | Are multi-step operations nested properly?                                                                                                      | Shows which step is slow or failing                               |
-| Correct observation types | Are generations marked as generations?                                                                                                          | Enables model-specific analytics                                  |
-| Sensitive data masked     | Is PII/confidential data excluded or masked?                                                                                                    | Prevents data leakage                                             |
+| Requirement               | Check                                                                                    | Why                                                    |
+| ------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------ |
+| Model name                | Is the LLM model captured?                                                               | Enables model comparison and filtering                 |
+| Token usage               | Are input/output tokens tracked?                                                         | Enables automatic cost calculation                     |
+| Good trace names          | Are names descriptive? (`chat-response`, not `trace-1`)                                  | Makes traces findable and filterable                   |
+| Span hierarchy            | Are multi-step operations nested properly?                                               | Shows which step is slow or failing                    |
+| Correct observation types | Are generations marked as generations?                                                   | Enables model-specific analytics                       |
+| Sensitive data masked     | Is PII/confidential data excluded or masked?                                             | Prevents data leakage                                  |
 | Trace input/output        | Does the trace capture meaningful input/output? Is input explicitly set to show only relevant data (e.g., user message), not all function args? | Makes traces readable in the UI and avoids leaking sensitive args |
 
 Framework integrations (OpenAI, LangChain, etc.) handle model name, tokens, and observation types automatically. Prefer integrations over manual instrumentation.
@@ -128,13 +122,13 @@ Learn more: https://langfuse.com/docs/tracing-features/sessions"
 
 ## Common Mistakes
 
-| Mistake                                        | Problem                                                            | Fix                                                                                                                                                           |
-| ---------------------------------------------- | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| No `flush()` in scripts                        | Traces never sent                                                  | Call `langfuse.flush()` before exit                                                                                                                           |
-| Flat traces                                    | Can't see which step failed                                        | Use nested spans for distinct steps                                                                                                                           |
-| Generic trace names                            | Hard to filter                                                     | Use descriptive names: `chat-response`, `doc-summary`                                                                                                         |
-| Logging sensitive data                         | Data leakage risk                                                  | Mask PII before tracing                                                                                                                                       |
+| Mistake                                        | Problem                                             | Fix                                                                               |
+| ---------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------- |
+| No `flush()` in scripts                        | Traces never sent                                   | Call `langfuse.flush()` before exit                                               |
+| Flat traces                                    | Can't see which step failed                         | Use nested spans for distinct steps                                               |
+| Generic trace names                            | Hard to filter                                      | Use descriptive names: `chat-response`, `doc-summary`                             |
+| Logging sensitive data                         | Data leakage risk                                   | Mask PII before tracing                                                           |
 | Not explicitly setting input with `@observe`   | All function args become trace input (including API keys, configs) | Python: use `langfuse.update_current_span(input=...)`. JS/TS: use `updateActiveObservation({ input: ... })`. Set only the relevant input (e.g., user message) |
-| Manual instrumentation when integration exists | More code, less context                                            | Use framework integration                                                                                                                                     |
-| Langfuse import before env vars loaded         | Langfuse initializes with missing/wrong credentials                | Import Langfuse AFTER loading environment variables (e.g., after `load_dotenv()`)                                                                             |
-| Wrong import order with OpenAI                 | Langfuse can't patch the OpenAI client                             | Import Langfuse and call its setup BEFORE importing OpenAI client                                                                                             |
+| Manual instrumentation when integration exists | More code, less context                             | Use framework integration                                                         |
+| Langfuse import before env vars loaded         | Langfuse initializes with missing/wrong credentials | Import Langfuse AFTER loading environment variables (e.g., after `load_dotenv()`) |
+| Wrong import order with OpenAI                 | Langfuse can't patch the OpenAI client              | Import Langfuse and call its setup BEFORE importing OpenAI client                 |

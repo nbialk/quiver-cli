@@ -14,7 +14,7 @@ Verify credentials are set before starting. Check existence only — never print
 ```bash
 [ -n "$LANGFUSE_PUBLIC_KEY" ] && echo "LANGFUSE_PUBLIC_KEY: set" || echo "LANGFUSE_PUBLIC_KEY: missing"
 [ -n "$LANGFUSE_SECRET_KEY" ] && echo "LANGFUSE_SECRET_KEY: set" || echo "LANGFUSE_SECRET_KEY: missing"
-[ -n "$LANGFUSE_HOST" ]       && echo "LANGFUSE_HOST: $LANGFUSE_HOST" || echo "LANGFUSE_HOST: missing"
+[ -n "$LANGFUSE_BASE_URL" ]   && echo "LANGFUSE_BASE_URL: $LANGFUSE_BASE_URL" || echo "LANGFUSE_BASE_URL: missing"
 ```
 
 If not set, ask the user to configure them in their shell or a `.env` file. Do not ask them to paste keys into chat.
@@ -41,33 +41,33 @@ Before writing ANY code, make a complete list of every prompt you found. For eac
 - Code file to refactor: the Python/JS file that USES the prompt (for asset files like .txt/.yaml/.md, this is the file that reads/loads the asset — NOT the asset file itself)
 - Type: chat (used as a message in a chat API) or text (used as a plain string)
 - Variables: values interpolated into the prompt, converted to {{var}} syntax:
-  f-string {var} → {{var}}
-  .format(var=...) → {{var}}
-  ${var} → {{var}}
-  String concatenation + var + → {{var}}
-  YAML {var} → {{var}}
+f-string {var} → {{var}}
+.format(var=...) → {{var}}
+${var} → {{var}}
+String concatenation + var + → {{var}}
+YAML {var} → {{var}}
 - Prompt content: the actual text to upload, with variables converted to {{var}} syntax
 
 Search for these patterns:
 
-| Framework | Look for                                          |
-| --------- | ------------------------------------------------- |
-| OpenAI    | `messages=[{"role": "system", "content": "..."}]` |
-| Anthropic | `system="..."`                                    |
-| LangChain | `ChatPromptTemplate`, `SystemMessage`             |
-| Vercel AI | `system: "..."`, `prompt: "..."`                  |
-| Raw       | Multi-line strings near LLM calls                 |
+| Framework | Look for |
+|-----------|----------|
+| OpenAI | `messages=[{"role": "system", "content": "..."}]` |
+| Anthropic | `system="..."` |
+| LangChain | `ChatPromptTemplate`, `SystemMessage` |
+| Vercel AI | `system: "..."`, `prompt: "..."` |
+| Raw | Multi-line strings near LLM calls |
 
 ## Step 2: Check Templating Compatibility
 
 **CRITICAL:** Langfuse only supports simple `{{variable}}` substitution. No conditionals, loops, or filters.
 
-| Template Feature         | Langfuse Native | Action               |
-| ------------------------ | --------------- | -------------------- |
-| `{{variable}}`           | ✅              | Direct migration     |
-| `{var}` / `${var}`       | ⚠️              | Convert to `{{var}}` |
-| `{% if %}` / `{% for %}` | ❌              | Move logic to code   |
-| `{{ var \| filter }}`    | ❌              | Apply filter in code |
+| Template Feature | Langfuse Native | Action |
+|------------------|-----------------|--------|
+| `{{variable}}` | ✅ | Direct migration |
+| `{var}` / `${var}` | ⚠️ | Convert to `{{var}}` |
+| `{% if %}` / `{% for %}` | ❌ | Move logic to code |
+| `{{ var \| filter }}` | ❌ | Apply filter in code |
 
 **CRITICAL — Variable syntax:** Langfuse uses DOUBLE curly braces for variables: `{{var}}`. When uploading prompt content, you MUST convert every single-brace `{var}` from the original code to double-brace `{{var}}`. Never upload `{var}` — it must be `{{var}}`.
 
@@ -85,14 +85,12 @@ Contains {% if %}, {% for %}, or filters?
 ### Simplifying Complex Templates
 
 **Conditionals** → Pre-compute in code:
-
 ```python
 # Instead of {% if user.is_premium %}...{% endif %} in prompt
 # Use {{tier_message}} and compute value in code before compile()
 ```
 
 **Loops** → Pre-format in code:
-
 ```python
 # Instead of {% for tool in tools %}...{% endfor %} in prompt
 # Use {{tools_list}} and format the list in code before compile()
@@ -104,34 +102,32 @@ For external templating details, fetch: https://langfuse.com/faq/all/using-exter
 
 ### Naming Conventions
 
-| Rule                       | Example               | Bad                  |
-| -------------------------- | --------------------- | -------------------- |
-| Lowercase, hyphenated      | `chat-assistant`      | `ChatAssistant_v2`   |
-| Feature-based              | `document-summarizer` | `prompt1`            |
-| Hierarchical for related   | `support/triage`      | `supportTriage`      |
-| Prefix subprompts with `_` | `_base-personality`   | `shared-personality` |
+| Rule | Example | Bad |
+|------|---------|-----|
+| Lowercase, hyphenated | `chat-assistant` | `ChatAssistant_v2` |
+| Feature-based | `document-summarizer` | `prompt1` |
+| Hierarchical for related | `support/triage` | `supportTriage` |
+| Prefix subprompts with `_` | `_base-personality` | `shared-personality` |
 
 ### Identify Subprompts
 
 Extract when:
-
 - Same text in 2+ prompts
 - Represents distinct component (personality, safety rules, format)
 - Would need to change together
 
 ### Variable Extraction
 
-| Make Variable                             | Keep Hardcoded             |
-| ----------------------------------------- | -------------------------- |
-| User-specific (`{{user_name}}`)           | Output format instructions |
-| Dynamic content (`{{context}}`)           | Safety guardrails          |
-| Per-request (`{{query}}`)                 | Persona/personality        |
-| Environment-specific (`{{company_name}}`) | Static examples            |
+| Make Variable | Keep Hardcoded |
+|---------------|----------------|
+| User-specific (`{{user_name}}`) | Output format instructions |
+| Dynamic content (`{{context}}`) | Safety guardrails |
+| Per-request (`{{query}}`) | Persona/personality |
+| Environment-specific (`{{company_name}}`) | Static examples |
 
 ## Step 4: Present Plan to User
 
 Format:
-
 ```
 Found N prompts across M files:
 
@@ -154,7 +150,6 @@ Proceed?
 ## Step 5: Create Prompts in Langfuse
 
 Use `langfuse.create_prompt()` with:
-
 - `name`: Your chosen name
 - `prompt`: Template text (or message array for chat type)
 - `type`: `"text"` or `"chat"`
@@ -162,7 +157,6 @@ Use `langfuse.create_prompt()` with:
 - `config`: Optional model settings
 
 **Labeling strategy:**
-
 - `production` → All migrated prompts
 - `staging` → Add later for testing
 - `latest` → Auto-applied by Langfuse
@@ -179,7 +173,6 @@ messages = prompt.compile(var1=value1, var2=value2)
 ```
 
 **Key points:**
-
 - Always use `label="production"` (not `latest`) for stability
 - Call `.compile()` to substitute variables
 - For chat prompts, result is message array ready for API
@@ -193,18 +186,17 @@ If codebase uses Langfuse tracing, link prompts so you can see which version pro
 ### Detect Existing Tracing
 
 Look for:
-
 - `@observe()` decorators
 - `langfuse.trace()` calls
 - `from langfuse.openai import openai` (instrumented client)
 
 ### Link Methods
 
-| Setup                  | How to Link                                                   |
-| ---------------------- | ------------------------------------------------------------- |
-| `@observe()` decorator | `langfuse_context.update_current_observation(prompt=prompt)`  |
-| Manual tracing         | `trace.generation(prompt=prompt, ...)`                        |
-| OpenAI integration     | `openai.chat.completions.create(..., langfuse_prompt=prompt)` |
+| Setup | How to Link |
+|-------|-------------|
+| `@observe()` decorator | `langfuse_context.update_current_observation(prompt=prompt)` |
+| Manual tracing | `trace.generation(prompt=prompt, ...)` |
+| OpenAI integration | `openai.chat.completions.create(..., langfuse_prompt=prompt)` |
 
 ### Verify in UI
 
@@ -227,12 +219,12 @@ For tracing details: fetch https://langfuse.com/docs/prompts/get-started#link-wi
 
 ### Common Issues
 
-| Issue                  | Solution                                     |
-| ---------------------- | -------------------------------------------- |
-| `PromptNotFoundError`  | Check name spelling                          |
+| Issue | Solution |
+|-------|----------|
+| `PromptNotFoundError` | Check name spelling |
 | Variables not replaced | Use `{{var}}` not `{var}`, call `.compile()` |
-| Subprompt not resolved | Must exist with same label                   |
-| Old prompt cached      | Restart app                                  |
+| Subprompt not resolved | Must exist with same label |
+| Old prompt cached | Restart app |
 
 ## Out of Scope
 

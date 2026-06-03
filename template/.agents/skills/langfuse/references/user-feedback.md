@@ -17,14 +17,14 @@ If the user has asked for something specific, go with that. Otherwise, look at t
 
 Common UX patterns to suggest:
 
-| UX Pattern                 | Best for                         | How it works                                                                       |
-| -------------------------- | -------------------------------- | ---------------------------------------------------------------------------------- |
-| Thumbs up/down             | Chat apps, Q&A                   | Simple binary buttons next to each response                                        |
-| Star rating (1–5)          | Content generation, summaries    | Star row or dropdown after each output                                             |
-| "Was this helpful?" banner | Search, documentation assistants | Single yes/no prompt at the bottom of a response                                   |
-| Regenerate / copy tracking | Any app with these actions       | Implicit — log when users retry (negative signal) or copy output (positive signal) |
-| Free-text comment          | Complex outputs, internal tools  | Optional text field alongside a rating                                             |
-| Report button              | Any user-facing app              | Flag icon to report bad/harmful responses                                          |
+| UX Pattern | Best for | How it works |
+|------------|----------|--------------|
+| Thumbs up/down | Chat apps, Q&A | Simple binary buttons next to each response |
+| Star rating (1–5) | Content generation, summaries | Star row or dropdown after each output |
+| "Was this helpful?" banner | Search, documentation assistants | Single yes/no prompt at the bottom of a response |
+| Regenerate / copy tracking | Any app with these actions | Implicit — log when users retry (negative signal) or copy output (positive signal) |
+| Free-text comment | Complex outputs, internal tools | Optional text field alongside a rating |
+| Report button | Any user-facing app | Flag icon to report bad/harmful responses |
 
 This table is not exhaustive — if the application suggests a different feedback pattern that fits better, propose that instead. Present 2–3 options that match the application's use case and ask the user which approach they'd like. This decision shapes everything downstream (score names, data types, frontend components), so it's important to align early.
 
@@ -32,10 +32,9 @@ Feedback can be **explicit** (user rates via thumbs, stars, etc.) or **implicit*
 
 ### 2. Choose Score Names
 
-Name reflects the signal source, not what you hope it measures (e.g., `user-thumbs` not `response-quality` — a thumbs down doesn't tell you _what_ was wrong). Avoid generic names like `feedback` or `score`.
+Name reflects the signal source, not what you hope it measures (e.g., `user-thumbs` not `response-quality` — a thumbs down doesn't tell you *what* was wrong). Avoid generic names like `feedback` or `score`.
 
 Rules:
-
 - Lowercase with hyphens
 - One consistent name per feedback type across the entire app
 - If capturing multiple signals, each gets its own distinct name
@@ -82,8 +81,8 @@ Point users to what they can do with feedback data: filter traces by low scores,
 
 ## Common Mistakes
 
-| Mistake                                 | Problem                            | Fix                                                |
-| --------------------------------------- | ---------------------------------- | -------------------------------------------------- |
-| Secret key in frontend code             | Security risk                      | Use `LangfuseWeb` with public key only             |
-| Missing `dataType` on boolean scores    | Value `1` inferred as `NUMERIC`    | Always pass `dataType: "BOOLEAN"` explicitly       |
+| Mistake | Problem | Fix |
+|---------|---------|-----|
+| Secret key in frontend code | Security risk | Use `LangfuseWeb` with public key only |
+| Missing `dataType` on boolean scores | Value `1` inferred as `NUMERIC` | Always pass `dataType: "BOOLEAN"` explicitly |
 | Inconsistent score names across the app | Can't aggregate or filter reliably | Pick one name per feedback type, use it everywhere |

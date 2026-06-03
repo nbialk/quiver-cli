@@ -12,7 +12,6 @@ allowed-tools:
   - Bash(bunx langfuse-cli api * --help *)
   - Bash(bunx langfuse-cli api * list *)
   - Bash(bunx langfuse-cli api * get *)
-  - Read(~/.claude/skills/langfuse/references/**)
 ---
 
 # Langfuse
@@ -24,9 +23,10 @@ This skill helps you use Langfuse effectively across all common workflows: instr
 Follow these principles for ALL Langfuse work:
 
 1. **Documentation First**: NEVER implement based on memory. Always fetch current docs before writing code (Langfuse updates frequently) See the section below on how to access documentation.
-2. **CLI for Data Access**: Use `langfuse-cli` when querying/modifying Langfuse data. See the section below on how to use the CLI.
+2. **CLI for Data Access**: Use `langfuse-cli` when querying/modifying Langfuse data. See the section below on how to use the CLI. 
 3. **Best Practices by Use Case**: Check the relevant reference file below for use-case-specific guidelines before implementing
 4. **Use latest Langfuse versions**: Unless the user specified otherwise or there's a good reason, always use the latest version of Langfuse SDKs/APIs.
+
 
 ## Use case specific references
 
@@ -35,8 +35,10 @@ Follow these principles for ALL Langfuse work:
 - capturing user feedback (thumbs, ratings, implicit signals) as scores on traces: references/user-feedback.md
 - further tips on using the Langfuse CLI: references/cli.md
 - upgrading or migrating Langfuse SDKs to the latest version: references/sdk-upgrade.md
+- judge calibration (LLM-as-a-Judge reliability, simple accuracy checks, advanced split-based validation, confusion matrices, and metric ingestion): references/judge-calibration.md
 - systematic error analysis — reading traces, building failure taxonomy, deciding what to fix: references/error-analysis.md
 - submitting feedback about this skill: references/skill-feedback.md
+
 
 ## 1. Langfuse API via CLI
 
@@ -62,7 +64,7 @@ Set environment variables before making calls:
 ```bash
 export LANGFUSE_PUBLIC_KEY=pk-lf-...
 export LANGFUSE_SECRET_KEY=sk-lf-...
-export LANGFUSE_HOST=https://cloud.langfuse.com # example for EU cloud. For US cloud it's us.cloud.langfuse.com, and can also be a self-hosted URL. The server must always be specified in order to access Langfuse.
+export LANGFUSE_BASE_URL=https://cloud.langfuse.com # example for EU cloud. For US cloud it's us.cloud.langfuse.com, and can also be a self-hosted URL. The server must always be specified in order to access Langfuse.
 ```
 
 If not set, ask the user to set them in their shell or a `.env` file (do not ask them to paste keys into chat for security reasons). Keys are found in Langfuse UI → Settings → API Keys.
