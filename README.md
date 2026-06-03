@@ -26,20 +26,27 @@ Use `--force` to overwrite existing `.agents/` / script files.
 
 ### Selecting MCP servers
 
-During `init`, you pick which MCP servers to install. Enter the numbers of the
-servers to keep (comma- or space-separated), `all`, or `none`:
+During `init`, you pick which MCP servers to install via an interactive
+checkbox list (all preselected):
 
 ```
-Select MCP servers to install:
-  1) playwright  (npx -y @playwright/mcp@latest --isolated)
-  2) langfuse-docs  (https://langfuse.com/api/mcp)
-  ...
-Enter numbers (comma-separated), 'all', or 'none' [all]:
+◆  Select MCP servers to install (space to toggle, a for all)
+│  ◼ playwright    npx -y @playwright/mcp@latest --isolated
+│  ◻ langfuse-docs https://langfuse.com/api/mcp
+│  ◼ context7      npx -y @upstash/context7-mcp@latest
+└
 ```
+
+- **↑ / ↓** move, **space** toggles a server, **a** toggles all, **enter** confirms.
+- **Ctrl+C** cancels and leaves `.agents/config.json` untouched.
 
 Deselected servers are stripped from the copied `.agents/config.json`. Pass
-`--all-mcp` (or `-y`) to keep every server without prompting, e.g. in CI. You can
-always re-edit `.agents/config.json` and re-run `npx nb-agents sync` afterward.
+`--all-mcp` (or `-y`) to keep every server without prompting, e.g. in CI. The
+prompt is skipped automatically when stdin is not a TTY. You can always re-edit
+`.agents/config.json` and re-run `npx nb-agents sync` afterward.
+
+> Requires Node >= 20.12. The interactive UI uses `@clack/prompts`; if it can't
+> load, `init` falls back to a plain numbered text prompt.
 
 ## Commands
 
