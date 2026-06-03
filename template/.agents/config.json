@@ -13,9 +13,8 @@
       "url": "https://langfuse.com/api/mcp"
     },
     "context7": {
-      "transport": "stdio",
-      "command": "npx",
-      "args": ["-y", "@upstash/context7-mcp@latest"]
+      "transport": "http",
+      "url": "https://mcp.context7.com/mcp"
     },
     "neon": {
       "transport": "http",
@@ -29,11 +28,18 @@
       "url": "https://mcp.vercel.com"
     },
     "notion": {
-      "transport": "stdio",
-      "command": "npx",
-      "args": ["-y", "@notionhq/notion-mcp-server"],
-      "env": {
-        "NOTION_TOKEN": "${NOTION_API_KEY}"
+      "transport": "http",
+      "url": "https://mcp.notion.com/mcp"
+    },
+    "posthog": {
+      "transport": "http",
+      "url": "https://mcp.posthog.com/mcp"
+    },
+    "langfuse": {
+      "transport": "http",
+      "url": "https://cloud.langfuse.com/api/public/mcp",
+      "headers": {
+        "Authorization": "Basic ${LANGFUSE_MCP_TOKEN}"
       }
     }
   },

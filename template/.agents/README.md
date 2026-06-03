@@ -118,14 +118,24 @@ interactive checkbox list (arrow keys, space to toggle, `a` for all) lets you
 pick which to keep; deselected ones are removed from this file. Servers needing a
 secret read it from an environment variable (set it in your shell or `.env`).
 
-| Server          | Transport | Source / URL                          | Env var          |
-| --------------- | --------- | ------------------------------------- | ---------------- |
-| `playwright`    | stdio     | `@playwright/mcp` (`--isolated`)      | —                |
-| `langfuse-docs` | http      | `https://langfuse.com/api/mcp`        | —                |
-| `context7`      | stdio     | `@upstash/context7-mcp`               | —                |
-| `neon`          | http      | `https://mcp.neon.tech/mcp`           | `NEON_API_KEY`   |
-| `vercel`        | http      | `https://mcp.vercel.com`              | —                |
-| `notion`        | stdio     | `@notionhq/notion-mcp-server`         | `NOTION_API_KEY` |
+| Server          | Transport | Source / URL                              | Env var             |
+| --------------- | --------- | ----------------------------------------- | ------------------- |
+| `playwright`    | stdio     | `@playwright/mcp` (`--isolated`)          | —                   |
+| `langfuse-docs` | http      | `https://langfuse.com/api/mcp`            | —                   |
+| `context7`      | http      | `https://mcp.context7.com/mcp`            | —                   |
+| `neon`          | http      | `https://mcp.neon.tech/mcp`               | `NEON_API_KEY`      |
+| `vercel`        | http      | `https://mcp.vercel.com`                  | —                   |
+| `notion`        | http      | `https://mcp.notion.com/mcp` (OAuth)      | —                   |
+| `posthog`       | http      | `https://mcp.posthog.com/mcp` (OAuth)     | —                   |
+| `langfuse`      | http      | `https://cloud.langfuse.com/api/public/mcp` | `LANGFUSE_MCP_TOKEN` |
+
+`langfuse-docs` is the read-only documentation MCP; `langfuse` is the data-platform
+MCP that can read and write traces, prompts, scores, and more. `LANGFUSE_MCP_TOKEN`
+is the base64 of `pk-lf-...:sk-lf-...` (`echo -n "pk-lf-…:sk-lf-…" | base64`).
+`posthog` and `notion` use OAuth: your MCP client prompts you to log in on first
+use, so no secret is stored. (PostHog clients without OAuth can instead set an
+`Authorization: Bearer phx_…` header with a personal API key.) `context7` works
+without a key; add a `CONTEXT7_API_KEY` header for higher rate limits if needed.
 
 ### Remove a command or skill
 
