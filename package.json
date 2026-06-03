@@ -1,6 +1,6 @@
 {
   "name": "nb-agents",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Portable AI agent config: shared .agents/ skills, commands & MCP setup installable into any repo",
   "type": "module",
   "bin": {
@@ -23,6 +23,6 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Snickers03/nb-agents.git"
+    "url": "git+https://github.com/nbialk/nb-agents-setup.git"
   }
 }

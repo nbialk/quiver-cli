@@ -10,8 +10,12 @@ and OpenCode.
 From the root of the target repository:
 
 ```bash
-npx github:nbialk/nb-agents init
+npx github:nbialk/nb-agents-setup init
 ```
+
+> `npx` caches GitHub installs. If you don't see the latest behavior (e.g. the
+> skill picker), clear the cache first: `npx clear-npx-cache` (or
+> `rm -rf ~/.npm/_npx`), then re-run.
 
 This will:
 
@@ -146,7 +150,7 @@ Then run `npx nb-agents sync` (or `pnpm agents:sync`).
 ## Updating the canonical config
 
 Edit files under `template/.agents/` in this repo. Bump the version, push, and in
-target repos run `npx github:Snickers03/nb-agents@latest update`.
+target repos run `npx github:nbialk/nb-agents-setup update`.
 
 ## How sync works
 
