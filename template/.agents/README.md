@@ -23,20 +23,23 @@ from the canonical files here.
 │   └── tf-readme.md     # /tf-readme — Terraform README audit
 └── skills/              # Background knowledge (symlinked to .claude/ and .opencode/)
     ├── design/          # UI/UX design skills
-    │   ├── impeccable/      # Production-grade frontend design + iteration
-    │   │                    #   (/impeccable craft|shape|audit|critique|polish|
-    │   │                    #   bolder|quieter|distill|harden|onboard|animate|
-    │   │                    #   colorize|typeset|layout|delight|overdrive|clarify|
-    │   │                    #   adapt|optimize|init|document|extract|live)
-    │   └── frontend-design/ # Design quality (+ 7 reference docs)
+    │   └── impeccable/      # Production-grade frontend design + iteration
+    │                        #   (/impeccable craft|shape|audit|critique|polish|
+    │                        #   bolder|quieter|distill|harden|onboard|animate|
+    │                        #   colorize|typeset|layout|delight|overdrive|clarify|
+    │                        #   adapt|optimize|init|document|extract|live)
     ├── code/            # Code quality skills
     │   ├── build-debug/     # Debug failed CI/CD runs
     │   ├── cleanup/         # Find unused code (knip)
-    │   └── code-quality-auditor/ # Code quality audit
+    │   └── code-quality-auditor/ # Maintainability hotspot audit (+ references)
     ├── repo/            # Repository setup skills
     │   ├── repo-ci/         # GitHub repo + CI setup
     │   ├── repo-init-next-js/ # Scaffold Next.js project (+ references, scripts)
     │   └── repo-init-node/  # Scaffold Node.js project
+    ├── langfuse/        # Langfuse observability: CLI, instrumentation,
+    │                    #   prompt migration, judge calibration (+ references)
+    ├── posthog/         # PostHog for Next.js: analytics, LLM analytics,
+    │                    #   error tracking, feature flags (+ references)
     └── db-query/        # Ad-hoc Prisma queries
 ```
 
