@@ -29,7 +29,6 @@ from the canonical files here.
     │                        #   colorize|typeset|layout|delight|overdrive|clarify|
     │                        #   adapt|optimize|init|document|extract|live)
     ├── code/            # Code quality skills
-    │   ├── build-debug/     # Debug failed CI/CD runs
     │   ├── cleanup/         # Find unused code (knip)
     │   └── code-quality-auditor/ # Maintainability hotspot audit (+ references)
     ├── repo/            # Repository setup skills
