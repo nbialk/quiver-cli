@@ -6,6 +6,7 @@ import process from "node:process";
 
 import {
   install,
+  selectCommands,
   selectMcpServers,
   selectSkills,
   templateRoot,
@@ -101,6 +102,7 @@ switch (command) {
     await ui.intro("nb-agents");
     await install(targetRoot, { force });
     await selectSkills(targetRoot, { interactive: !skipPrompts });
+    await selectCommands(targetRoot, { interactive: !skipPrompts });
     await selectMcpServers(targetRoot, { interactive: !skipPrompts });
     const status = await runSyncQuiet();
     if (status === 0) {

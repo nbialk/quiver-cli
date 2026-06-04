@@ -21,11 +21,11 @@ This will:
 
 1. Copy `.agents/` (skills, commands, config) into the repo.
 2. Copy `scripts/agents/sync-agent-shims.mjs`.
-3. Prompt which skills to keep (interactive; skipped when not a TTY).
-4. Prompt which MCP servers to keep (interactive; skipped when not a TTY).
-5. Wire `agents:sync`, `agents:check`, and `postinstall` into `package.json`.
-6. Add generated provider paths to `.gitignore`.
-7. Run an initial sync to create the `.claude/` and `.opencode/` shims.
+3. Prompt which skills, commands, and MCP servers to keep (interactive; skipped
+   when not a TTY).
+4. Wire `agents:sync`, `agents:check`, and `postinstall` into `package.json`.
+5. Add generated provider paths to `.gitignore`.
+6. Run an initial sync to create the `.claude/` and `.opencode/` shims.
 
 Use `--force` to overwrite existing `.agents/` / script files.
 
@@ -51,24 +51,39 @@ During `init` you pick which skills to install via a grouped checkbox list.
 Deselected skill directories are **deleted** from the copied `.agents/skills/`
 (empty group folders are cleaned up too).
 
+### Selecting commands
+
+Next you pick slash commands. `/cp` is preselected; the rest start off:
+
+```
+◆  Select commands to install (space toggles, a all, enter confirms)
+│  (commands)
+│  ◼ /cp
+│  ◻ /next-setup
+│  ◻ /tf-readme
+└
+```
+
+Deselected command files are **deleted** from the copied `.agents/commands/`.
+
 ### Selecting MCP servers
 
-Next you pick MCP servers, grouped by transport (remote first, then local),
-all preselected:
+Finally you pick MCP servers, grouped by transport (remote first, then local).
+**Nothing is preselected** — pick only what you need:
 
 ```
 ◆  Select MCP servers (space toggles, a all, enter confirms)
 │  (remote)
-│  ◼ langfuse-docs https://langfuse.com/api/mcp
-│  ◼ context7      https://mcp.context7.com/mcp
+│  ◻ langfuse-docs https://langfuse.com/api/mcp
+│  ◻ context7      https://mcp.context7.com/mcp
 │  (local)
-│  ◼ playwright    npx -y @playwright/mcp@latest --isolated
+│  ◻ playwright    npx -y @playwright/mcp@latest --isolated
 └
 ```
 
 Deselected servers are stripped from the copied `.agents/config.json`.
 
-### Both prompts
+### All prompts
 
 - **↑ / ↓** move, **space** toggles, **a** toggles all, **enter** confirms.
 - **Ctrl+C** cancels with no changes.
@@ -108,7 +123,7 @@ is gitignored too.
 
 | Command                    | Description                                              |
 | -------------------------- | -------------------------------------------------------- |
-| `npx nb-agents init`       | Full setup (copy + select skills & MCP + wire + sync)    |
+| `npx nb-agents init`       | Full setup (copy + select skills/commands/MCP + sync)    |
 | `npx nb-agents sync`       | Regenerate provider shims                                |
 | `npx nb-agents check`      | Verify shims are up to date (exit 1 if not, for CI)      |
 | `npx nb-agents update`     | Re-copy `.agents/` + script only (keeps package.json)    |
