@@ -20,7 +20,11 @@ export interface SkillEntry {
   digest: string;
   /** null = follow catalog HEAD; "tag:v1" / "sha:abc" once remote pinning lands. */
   pin: string | null;
-  frontmatter: { name: string | null; description: string | null };
+  frontmatter: {
+    name: string | null;
+    description: string | null;
+    version: string | null;
+  };
 }
 
 export interface CommandEntry {

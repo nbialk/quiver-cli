@@ -21,6 +21,7 @@ Commands:
   add <id>         Add a single catalog entry (skill:<name>, command:<name>, mcp:<name>)
   remove <id>      Remove a single entry; keep lockfile + configs consistent
   sync             Pull catalog state into the repo (additive, warns on drift)
+  list             Show installed entries (skills, commands, MCP tool counts)
   status           Diff the lockfile against what is actually in the repo
   check            Detect upstream drift (skill digests, MCP tool snapshots)
   upstream         Check source repos for skill updates (catalog maintenance)
@@ -75,6 +76,12 @@ const run = async (): Promise<void> => {
     case "sync": {
       const { sync } = await import("./commands/sync.js");
       await sync(options);
+      break;
+    }
+    case "list":
+    case "ls": {
+      const { list } = await import("./commands/list.js");
+      await list(options);
       break;
     }
     case "status": {
