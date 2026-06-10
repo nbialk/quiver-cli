@@ -1,179 +1,120 @@
-# nb-agents
+# quiver-cli
 
-Portable AI agent configuration. Hosts a single canonical `.agents/` directory
-(skills, slash commands, MCP servers, permissions, agent guides) and installs it
-into any repository with one command. Generates provider shims for Claude Code
-and OpenCode.
+Compose a selected subset of skills, slash commands and MCP servers from a
+central catalog into any repo — as **native configs** for opencode, Claude Code
+and Codex — with **lockfile-based drift awareness**.
+
+One thing done right: repo composition + drift detection. No marketplace, no
+extra agents, no command abstraction.
 
 ## Install into a repo
 
 From the root of the target repository:
 
 ```bash
-npx github:nbialk/nb-agents-setup init
+pnpm dlx quiver-cli init
 ```
-
-> `npx` caches GitHub installs. If you don't see the latest behavior (e.g. the
-> skill picker), clear the cache first: `npx clear-npx-cache` (or
-> `rm -rf ~/.npm/_npx`), then re-run.
 
 This will:
 
-1. Copy `.agents/` (skills, commands, config) into the repo.
-2. Copy `scripts/agents/sync-agent-shims.mjs`.
-3. Prompt which skills, commands, and MCP servers to keep (interactive; skipped
-   when not a TTY).
-4. Wire `agents:sync`, `agents:check`, and `postinstall` into `package.json`.
-5. Add generated provider paths to `.gitignore`.
-6. Run an initial sync to create the `.claude/` and `.opencode/` shims.
+1. Let you pick skills, commands and MCP servers from the catalog (interactive).
+2. Materialize the selected artifacts into the repo's `.agents/` (committed).
+3. Generate native provider configs and write `quiver.lock`.
+4. Add generated shims + `.env.local` to `.gitignore`.
 
-Use `--force` to overwrite existing `.agents/` / script files.
-
-### Selecting skills
-
-During `init` you pick which skills to install via a grouped checkbox list.
-`find-skills` and `skill-creator` are preselected; everything else starts off:
-
-```
-◆  Select skills to install (space toggles, a all, enter confirms)
-│  (general)
-│  ◼ find-skills
-│  ◼ skill-creator
-│  ◻ agent-browser
-│  ◻ db-query
-│  (code)
-│  ◻ cleanup
-│  (design)
-│  ◻ impeccable
-└
-```
-
-Deselected skill directories are **deleted** from the copied `.agents/skills/`
-(empty group folders are cleaned up too).
-
-### Selecting commands
-
-Next you pick slash commands. `/cp` is preselected; the rest start off:
-
-```
-◆  Select commands to install (space toggles, a all, enter confirms)
-│  (commands)
-│  ◼ /cp
-│  ◻ /next-setup
-│  ◻ /tf-readme
-└
-```
-
-Deselected command files are **deleted** from the copied `.agents/commands/`.
-
-### Selecting MCP servers
-
-Finally you pick MCP servers, grouped by transport (remote first, then local).
-**Nothing is preselected** — pick only what you need:
-
-```
-◆  Select MCP servers (space toggles, a all, enter confirms)
-│  (remote)
-│  ◻ langfuse-docs https://langfuse.com/api/mcp
-│  ◻ context7      https://mcp.context7.com/mcp
-│  (local)
-│  ◻ playwright    npx -y @playwright/mcp@latest --isolated
-└
-```
-
-Deselected servers are stripped from the copied `.agents/config.json`.
-
-### All prompts
-
-- **↑ / ↓** move, **space** toggles, **a** toggles all, **enter** confirms.
-- **Ctrl+C** cancels with no changes.
-- Pass `--all` (or `-y`) to keep everything without prompting, e.g. in CI. The
-  prompts are skipped automatically when stdin is not a TTY.
-- You can always re-edit afterward and re-run `npx nb-agents sync`.
-
-> Requires Node >= 20.12. The interactive UI uses `@clack/prompts`; if it can't
-> load, `init` falls back to a plain numbered text prompt.
-
-### Secrets (`.env.local`)
-
-Some MCP servers need a secret, referenced in `.agents/config.json` as
-`${VAR_NAME}`. The single, central place for these is **`.env.local` in your repo
-root**. The sync script reads it and interpolates the values into the generated
-`.mcp.json` / `opencode.json`.
-
-`init` drops a `.env.local.example` at the repo root and adds `.env.local` to
-`.gitignore`. To set up secrets:
-
-```bash
-cp .env.local.example .env.local   # then fill in the values you need
-npx nb-agents sync                 # regenerate with secrets interpolated
-```
-
-Currently only two servers need a secret:
-
-- `NEON_API_KEY` — Neon personal API key
-- `LANGFUSE_MCP_TOKEN` — base64 of `pk-lf-…:sk-lf-…` (`echo -n "pk-lf-…:sk-lf-…" | base64`)
-
-The rest authenticate via OAuth on first use (`vercel`, `notion`, `posthog`) or
-need nothing (`playwright`, `langfuse-docs`, `context7`). Never commit
-`.env.local`; the generated `.mcp.json` already contains the resolved secrets and
-is gitignored too.
+`.agents/` and `quiver.lock` are the source of truth and should be committed.
+The generated provider files are not.
 
 ## Commands
 
-| Command                    | Description                                              |
-| -------------------------- | -------------------------------------------------------- |
-| `npx nb-agents init`       | Full setup (copy + select skills/commands/MCP + sync)    |
-| `npx nb-agents sync`       | Regenerate provider shims                                |
-| `npx nb-agents check`      | Verify shims are up to date (exit 1 if not, for CI)      |
-| `npx nb-agents update`     | Re-copy `.agents/` + script only (keeps package.json)    |
-| `npx nb-agents help`       | Show help                                                |
+| Command                  | Description                                                       |
+| ------------------------ | ----------------------------------------------------------------- |
+| `quiver-cli init`        | Interactive picker; write native configs + `quiver.lock`          |
+| `quiver-cli add <id>`    | Add one entry (`skill:<name>`, `command:<name>`, `mcp:<name>`)    |
+| `quiver-cli remove <id>` | Remove one entry; keep lockfile + configs consistent              |
+| `quiver-cli sync`        | Regenerate provider shims from `.agents/`; warn on drift          |
+| `quiver-cli status`      | Diff the lockfile against what is actually in the repo (exit 1)   |
+| `quiver-cli check`       | Detect upstream drift (skill digests, MCP tool snapshots)         |
+| `quiver-cli upstream`    | Check source repos for skill updates (catalog maintenance)        |
+| `quiver-cli help`        | Show help                                                         |
 
-After install you can also use the wired scripts: `pnpm agents:sync`,
-`pnpm agents:check` (or `npm run` / `yarn`).
+Options: `-f/--force`, `--all/-y` (non-interactive), `--json`
+(status/check/upstream), `--introspect-stdio` (allow running stdio MCP servers
+during `check`).
 
-## What gets installed
+## What gets generated
 
+| Artifact | Claude Code              | opencode                    | Codex                          |
+| -------- | ------------------------ | --------------------------- | ------------------------------ |
+| Skills   | `.claude/skills/*` (link)| `.opencode/skills/*` (link) | native from `.agents/skills`   |
+| Commands | `.claude/commands/*`     | `.opencode/commands/*`      | (not supported yet)            |
+| MCP      | `.mcp.json`              | `opencode.json`             | `.codex/config.toml`           |
+| Guide    | `CLAUDE.md` (link)       | `AGENTS.md` (link)          | `AGENTS.md` (native)           |
+
+`AGENTS.md` at the repo root is a symlink to `.agents/AGENTS.md` (created only
+when the catalog ships one); `CLAUDE.md` links to it. Codex reads skills and
+`AGENTS.md` natively from the repo, so no shims are emitted for those.
+
+## The lockfile
+
+`quiver.lock` records, per entry: source path, content digest, and — for MCP
+servers — a **tool snapshot** (`{ description, inputSchemaHash }` per tool).
+This is the basis for `status`, `sync` and `check`.
+
+## `check` — drift awareness
+
+- **Skills/commands**: compares the stored digest against the current `.agents/`
+  content.
+- **MCP servers** (the real lever): re-introspects `tools/list` and diffs against
+  the snapshot → new/removed tools, changed input schemas, and — security
+  critical — **changed tool descriptions** (defends against tool-description
+  poisoning), shown as a readable before/after.
+
+The first successful introspection records a baseline; subsequent `check` runs
+diff against it. Servers that fail introspection (e.g. requiring interactive
+OAuth) are reported as skipped. stdio servers run foreign code and are only
+introspected with `--introspect-stdio`.
+
+`quiver-cli check --json` is CI-friendly (exit 1 on drift).
+
+## `upstream` — source updates
+
+`check` detects drift between the lockfile and the repo's `.agents/`. `upstream`
+answers a different question: **has the source repo updated a skill since it was
+imported into the catalog?**
+
+Origins live in `template/.agents/upstreams.json` (`repo`, `path`, `ref` per
+skill). `quiver-cli upstream` queries the GitHub Commits API for the latest
+commit touching each path:
+
+- First run records a baseline commit per skill.
+- Later runs report `up to date`, `upstream updated <old> → <new>`, or `skipped`
+  (e.g. rate-limited). To lift the anonymous 60 req/h limit, provide a token via
+  `GITHUB_TOKEN`/`GH_TOKEN` (env or repo `.env.local`), or just log in with the
+  `gh` CLI — its token is picked up automatically.
+- Skills flagged `curated: true` are reported as **drift-curated** — they were
+  modified after import, so changes must be reconciled by hand.
+
+Updating is manual: re-fetch with the skills CLI (`pnpm dlx skills add <repo>`),
+copy into the catalog, then `quiver-cli upstream` again to record the new
+baseline. `quiver-cli upstream --json` is CI-friendly (exit 1 on drift).
+
+## Secrets
+
+MCP servers referencing `${VAR}` placeholders resolve from `.env.local` at the
+repo root (gitignored). `init`/`add` generate an `.env.local.example` listing
+exactly the variables the selected servers need (none needed → no file). For
+Codex, secret headers are mapped to `env_http_headers` so secrets never land in
+the committed `config.toml`.
+
+## Development
+
+```bash
+pnpm install
+pnpm build          # tsup -> dist/cli.js
+pnpm typecheck
+pnpm test           # vitest
 ```
-.agents/                    # canonical source of truth (committed)
-├── AGENTS.md               # root agent guide — EDIT per project
-├── config.json             # MCP servers, permissions, TUI theme
-├── design-context.md       # UI/UX guidelines — EDIT per project
-├── commands/               # slash commands
-└── skills/                 # skills, nested in groups (design/, code/, repo/, …)
-scripts/agents/
-└── sync-agent-shims.mjs    # generates provider shims from .agents/
-.env.local.example          # secrets template — copy to .env.local, then fill in
-```
 
-Generated (gitignored): `.claude/`, `.opencode/`, `.mcp.json`, `opencode.json`,
-`tui.json`, `.env.local`.
-
-## Per-project customization
-
-The template ships a full skill/command set. The `init` prompts let you pick
-skills and MCP servers up front; you can refine further afterward:
-
-- **`.agents/AGENTS.md`** — replace stack/structure details with the new repo's.
-- **`.agents/design-context.md`** — adjust design guidelines.
-- **`.agents/config.json`** — remove MCP servers you don't need; secrets stay as
-  `${ENV_VAR}` placeholders resolved from `.env.local` (see [Secrets](#secrets-envlocal)).
-- Delete (or re-add) skill directories under `.agents/skills/`.
-
-Then run `npx nb-agents sync` (or `pnpm agents:sync`).
-
-## Updating the canonical config
-
-Edit files under `template/.agents/` in this repo. Bump the version, push, and in
-target repos run `npx github:nbialk/nb-agents-setup update`.
-
-## How sync works
-
-`sync-agent-shims.mjs` reads `.agents/config.json` and the `.agents/skills` /
-`.agents/commands` trees, then:
-
-- Writes `.claude/settings.json`, `.mcp.json`, `opencode.json` from config.
-- Symlinks each skill (discovered recursively, any nesting depth) into
-  `.claude/skills/` and `.opencode/skills/` by leaf name.
-- Symlinks each command into `.claude/commands/` and `.opencode/commands/`.
-- Removes stale shims that no longer have a source.
+The catalog lives under `template/.agents/`. Edit it to change what's available
+to install.
