@@ -1,28 +1,52 @@
 {
-  "name": "nb-agents",
-  "version": "0.3.0",
-  "description": "Portable AI agent config: shared .agents/ skills, commands & MCP setup installable into any repo",
+  "name": "quiver-cli",
+  "version": "1.0.0-alpha.0",
+  "description": "Compose a selected subset of skills, commands & MCP servers from a central catalog into any repo as native configs for opencode, Claude Code and Codex - with lockfile-based drift awareness.",
   "type": "module",
   "bin": {
-    "nb-agents": "bin/cli.mjs"
+    "quiver-cli": "bin/quiver-cli.mjs"
   },
   "files": [
     "bin",
-    "lib",
+    "dist",
     "template"
   ],
   "engines": {
     "node": ">=20.12.0"
   },
+  "keywords": [
+    "agents",
+    "agent-skills",
+    "mcp",
+    "claude-code",
+    "opencode",
+    "codex",
+    "cli",
+    "lockfile"
+  ],
+  "packageManager": "pnpm@8.15.6",
   "dependencies": {
-    "@clack/prompts": "^1.5.1"
+    "@clack/prompts": "^1.5.1",
+    "@iarna/toml": "^2.2.5",
+    "@modelcontextprotocol/sdk": "^1.12.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsup": "^8.3.5",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
   },
   "scripts": {
-    "test:install": "node bin/cli.mjs help"
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepare": "tsup"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/nbialk/nb-agents-setup.git"
+    "url": "git+https://github.com/nbialk/quiver-cli.git"
   }
 }
