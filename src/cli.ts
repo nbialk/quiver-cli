@@ -8,6 +8,8 @@ export interface CliOptions {
   all: boolean;
   json: boolean;
   introspectStdio: boolean;
+  /** From --providers=a,b - validated by the consuming command. */
+  providers: string[] | null;
   positionals: string[];
 }
 
@@ -32,7 +34,8 @@ Commands:
 Options:
   -f, --force          Overwrite existing files
   --all, -y            Keep everything without prompting (non-interactive)
-  --json               Machine-readable output (status/check/upstream)
+  --json               Machine-readable output (status/check/upstream/list)
+  --providers=a,b      Generate configs only for these tools (claude, opencode, codex)
   --introspect-stdio   Allow introspecting stdio MCP servers (runs foreign code)
   -v, --version        Show the quiver-cli version
 `;
@@ -41,6 +44,16 @@ const parse = (argv: string[]): { command: string; options: CliOptions } => {
   const [command = "init", ...rest] = argv;
   const flags = new Set(rest.filter((a) => a.startsWith("-")));
   const positionals = rest.filter((a) => !a.startsWith("-"));
+
+  const providersFlag = rest.find((a) => a.startsWith("--providers="));
+  const providers = providersFlag
+    ? providersFlag
+        .slice("--providers=".length)
+        .split(",")
+        .map((p) => p.trim())
+        .filter(Boolean)
+    : null;
+
   return {
     command,
     options: {
@@ -49,6 +62,7 @@ const parse = (argv: string[]): { command: string; options: CliOptions } => {
       all: flags.has("--all") || flags.has("--yes") || flags.has("-y"),
       json: flags.has("--json"),
       introspectStdio: flags.has("--introspect-stdio"),
+      providers,
       positionals,
     },
   };

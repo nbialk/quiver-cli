@@ -34,6 +34,7 @@ export const writeLockfile = (targetRoot: string, lock: Lockfile): void => {
   const ordered: Lockfile = {
     version: lock.version,
     catalog: lock.catalog,
+    ...(lock.providers !== undefined ? { providers: lock.providers } : {}),
     entries: sortedEntries,
   };
   writeFileSync(lockfilePath(targetRoot), JSON.stringify(ordered, null, 2) + "\n");

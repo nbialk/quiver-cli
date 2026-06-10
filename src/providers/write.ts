@@ -2,9 +2,9 @@ import { existsSync, lstatSync } from "node:fs";
 import { basename, resolve } from "node:path";
 
 import type { Catalog, McpServer } from "../catalog/discover.js";
-import type { Lockfile } from "../lockfile/schema.js";
+import { PROVIDERS, type Lockfile, type Provider } from "../lockfile/schema.js";
 import { interpolateEnvVars, loadEnvLocal } from "../secrets/interpolate.js";
-import type { ProviderInputs } from "./claude.js";
+import type { ProviderInputs, ProviderPlan } from "./claude.js";
 import { planClaude } from "./claude.js";
 import { planCodex } from "./codex.js";
 import {
@@ -39,6 +39,7 @@ const buildPlan = (
 ): {
   files: FileOutput[];
   removeFiles: string[];
+  removeDirs: string[];
   symlinks: SymlinkOutput[];
   managedDirs: ManagedDir[];
 } => {
@@ -60,7 +61,33 @@ const buildPlan = (
     claudeSettings: catalog.config.claude?.settings ?? null,
   };
 
-  const plans = [planClaude(inputs), planOpenCode(inputs), planCodex(inputs)];
+  // Plan all providers; deselected ones (lockfile `providers`) contribute
+  // removals instead of outputs, so switching tools cleans up their shims.
+  const active: Provider[] = lock.providers?.length
+    ? lock.providers
+    : [...PROVIDERS];
+  const planByProvider: Record<Provider, ProviderPlan> = {
+    claude: planClaude(inputs),
+    opencode: planOpenCode(inputs),
+    codex: planCodex(inputs),
+  };
+  const plans: ProviderPlan[] = [];
+  const removeDirs: string[] = [];
+  const removedOutputs: string[] = [];
+  for (const provider of PROVIDERS) {
+    const plan = planByProvider[provider];
+    if (active.includes(provider)) {
+      plans.push(plan);
+    } else {
+      removedOutputs.push(...plan.files.map((f) => f.path), ...plan.removeFiles);
+      // Symlinks may point at directories; removePath (lstat-based) handles
+      // them safely, so they go through removeDirs alongside the shim dirs.
+      removeDirs.push(
+        ...plan.symlinks.map((s) => s.path),
+        ...plan.managedDirs.map((d) => d.path),
+      );
+    }
+  }
 
   // Root discovery symlinks (AGENTS.md, CLAUDE.md) when the catalog ships
   // them. Existing real files are user content: skip and report, never replace.
@@ -79,7 +106,8 @@ const buildPlan = (
 
   return {
     files: plans.flatMap((p) => p.files),
-    removeFiles: plans.flatMap((p) => p.removeFiles),
+    removeFiles: [...plans.flatMap((p) => p.removeFiles), ...removedOutputs],
+    removeDirs,
     symlinks: [...rootSymlinks, ...plans.flatMap((p) => p.symlinks)],
     managedDirs: plans.flatMap((p) => p.managedDirs),
   };

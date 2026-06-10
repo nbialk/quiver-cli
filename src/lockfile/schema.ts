@@ -3,6 +3,12 @@ export const LOCKFILE_NAME = "quiver.lock";
 
 export type EntryType = "skill" | "command" | "mcp";
 
+export const PROVIDERS = ["claude", "opencode", "codex"] as const;
+export type Provider = (typeof PROVIDERS)[number];
+
+export const isProvider = (v: string): v is Provider =>
+  (PROVIDERS as readonly string[]).includes(v);
+
 export interface CatalogRef {
   /** e.g. "local:template/.agents" now, "github:owner/repo" later. */
   source: string;
@@ -55,6 +61,8 @@ export type LockEntry = SkillEntry | CommandEntry | McpEntry;
 export interface Lockfile {
   version: typeof LOCKFILE_VERSION;
   catalog: CatalogRef;
+  /** Tools to generate configs for; null/absent = all (backwards compatible). */
+  providers?: Provider[] | null;
   entries: Record<string, LockEntry>;
 }
 

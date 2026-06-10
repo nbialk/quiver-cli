@@ -119,11 +119,14 @@ export const list = async (options: CliOptions): Promise<void> => {
     }
   }
 
+  const providers = lock.providers?.length
+    ? lock.providers.join(", ")
+    : "claude, opencode, codex";
   lines.push(
     "",
     `  ${c.bold(
       `${skills.length} skills · ${commands.length} commands · ${mcp.length} MCP servers`,
-    )}`,
+    )}  ${c.dim(`providers: ${providers}`)}`,
     "",
   );
   ui.block(lines);

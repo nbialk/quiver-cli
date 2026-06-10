@@ -5,6 +5,7 @@ import {
   readdirSync,
   readFileSync,
   readlinkSync,
+  rmdirSync,
   rmSync,
   symlinkSync,
   unlinkSync,
@@ -60,11 +61,14 @@ export const applyOutputs = ({
   files,
   symlinks,
   removeFiles,
+  removeDirs = [],
   managedDirs,
 }: {
   files: FileOutput[];
   symlinks: SymlinkOutput[];
   removeFiles: string[];
+  /** Directories (e.g. deselected provider shim dirs) to remove recursively. */
+  removeDirs?: string[];
   managedDirs: ManagedDir[];
 }): ApplyResult => {
   const result: ApplyResult = { generated: [], linked: [], removed: [] };
@@ -86,6 +90,20 @@ export const applyOutputs = ({
     if (!existsSync(path)) continue;
     rmSync(path, { force: true });
     result.removed.push(path);
+  }
+
+  for (const path of removeDirs) {
+    if (!existsSync(path)) continue;
+    removePath(path);
+    result.removed.push(path);
+  }
+  // Prune now-empty parents (e.g. .claude/ after its shim dirs are removed).
+  for (const path of removeDirs) {
+    try {
+      rmdirSync(dirname(path));
+    } catch {
+      // not empty or already gone - keep user content untouched
+    }
   }
 
   for (const link of symlinks) {
@@ -122,11 +140,13 @@ export const checkOutputs = ({
   files,
   symlinks,
   removeFiles,
+  removeDirs = [],
   managedDirs,
 }: {
   files: FileOutput[];
   symlinks: SymlinkOutput[];
   removeFiles: string[];
+  removeDirs?: string[];
   managedDirs: ManagedDir[];
 }): string[] => {
   const problems: string[] = [];
@@ -143,6 +163,10 @@ export const checkOutputs = ({
   }
 
   for (const path of removeFiles) {
+    if (existsSync(path)) problems.push(`stale (should be removed): ${path}`);
+  }
+
+  for (const path of removeDirs) {
     if (existsSync(path)) problems.push(`stale (should be removed): ${path}`);
   }
 
