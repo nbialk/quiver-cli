@@ -1,9 +1,12 @@
+import { cpSync, rmSync } from "node:fs";
+
 import type { CliOptions } from "../cli.js";
 import { loadCatalog } from "../catalog/discover.js";
 import { resolveCatalog } from "../catalog/resolve.js";
 import {
   evaluateOrigin,
   fetchLatestCommit,
+  fetchUpstreamDir,
   loadUpstreams,
   writeUpstreams,
   type UpstreamReport,
@@ -13,11 +16,17 @@ import * as ui from "../ui/prompts.js";
 
 // Check source repos for skill updates. Runs against the bundled catalog (not a
 // target repo): records a baseline commit per tracked skill on first run, then
-// reports upstream drift on subsequent runs.
+// reports upstream drift on subsequent runs. `upstream pull [skill]` replaces
+// catalog copies with the latest upstream content.
 export const upstream = async (options: CliOptions): Promise<void> => {
   // Pick up a GITHUB_TOKEN from the repo's .env.local if present (env and the
   // gh CLI are also tried, in resolveGithubToken).
   loadEnvLocal(options.targetRoot);
+
+  if (options.positionals[0] === "pull") {
+    await pull(options);
+    return;
+  }
 
   const resolved = resolveCatalog();
   const catalog = loadCatalog(resolved);
@@ -69,6 +78,116 @@ const STATUS_ORDER: Record<UpstreamReport["status"], number> = {
   skipped: 2,
   baseline: 3,
   ok: 4,
+};
+
+type PullStatus =
+  | "pulled"
+  | "up-to-date"
+  | "curated-skipped"
+  | "not-in-catalog"
+  | "error";
+
+interface PullReport {
+  name: string;
+  status: PullStatus;
+  detail?: string;
+}
+
+// Replace catalog skill copies with the latest upstream content (sparse git
+// clone), then record the new baseline commit. Curated skills are skipped
+// unless --force is given.
+const pull = async (options: CliOptions): Promise<void> => {
+  const resolved = resolveCatalog();
+  const catalog = loadCatalog(resolved);
+  const upstreams = loadUpstreams(resolved);
+
+  const only = options.positionals[1];
+  if (only && !upstreams[only]) {
+    await ui.error(`${only} is not tracked in upstreams.json.`);
+    process.exitCode = 1;
+    return;
+  }
+  const names = only
+    ? [only]
+    : Object.keys(upstreams).sort((a, b) => a.localeCompare(b));
+
+  const reports: PullReport[] = [];
+  let mapChanged = false;
+
+  for (const name of names) {
+    const origin = upstreams[name]!;
+    const skill = catalog.skills.find((s) => s.name === name);
+    if (!skill) {
+      reports.push({ name, status: "not-in-catalog" });
+      continue;
+    }
+    if (origin.curated && !options.force) {
+      reports.push({
+        name,
+        status: "curated-skipped",
+        detail: "modified after import - use --force to overwrite",
+      });
+      continue;
+    }
+
+    const latest = await fetchLatestCommit(origin);
+    if (!latest.ok) {
+      reports.push({ name, status: "error", detail: latest.reason });
+      continue;
+    }
+    if (origin.commit === latest.sha && !options.force) {
+      reports.push({ name, status: "up-to-date" });
+      continue;
+    }
+
+    const fetched = fetchUpstreamDir(origin);
+    if (!fetched.ok) {
+      reports.push({ name, status: "error", detail: fetched.reason });
+      continue;
+    }
+    try {
+      rmSync(skill.absDir, { recursive: true, force: true });
+      cpSync(fetched.dir, skill.absDir, { recursive: true, dereference: true });
+    } finally {
+      fetched.cleanup();
+    }
+    origin.commit = latest.sha;
+    origin.fetchedAt = new Date().toISOString();
+    mapChanged = true;
+    reports.push({ name, status: "pulled", detail: latest.sha.slice(0, 10) });
+  }
+
+  if (mapChanged) writeUpstreams(resolved, upstreams);
+
+  if (options.json) {
+    console.log(JSON.stringify({ ok: true, skills: reports }, null, 2));
+    return;
+  }
+
+  const c = ui.palette();
+  const lines: string[] = [""];
+  for (const r of reports) {
+    if (r.status === "pulled")
+      lines.push(`  ${c.cyan("↓")} ${r.name}  pulled @ ${r.detail}`);
+    else if (r.status === "up-to-date")
+      lines.push(`  ${c.green("✓")} ${r.name}  ${c.dim("up to date")}`);
+    else if (r.status === "curated-skipped")
+      lines.push(`  ${c.yellow("▲")} ${r.name}  ${c.yellow(r.detail ?? "curated")}`);
+    else if (r.status === "not-in-catalog")
+      lines.push(`  ${c.dim("•")} ${r.name}  ${c.dim("not in catalog")}`);
+    else lines.push(`  ${c.red("✗")} ${r.name}  ${c.red(r.detail ?? "error")}`);
+  }
+  const pulled = reports.filter((r) => r.status === "pulled").length;
+  lines.push(
+    "",
+    `  ${
+      pulled
+        ? c.cyan(`↓ ${pulled} pulled - review, rebuild and commit the catalog`)
+        : c.green("✓ nothing to pull")
+    }`,
+    "",
+  );
+  ui.block(lines);
 };
 
 const report = async (

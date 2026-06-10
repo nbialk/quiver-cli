@@ -1,6 +1,13 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import {
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import type { ResolvedCatalog } from "./resolve.js";
 
@@ -132,6 +139,67 @@ export const fetchLatestCommit = async (
     sha: head.sha,
     date: head.commit?.committer?.date ?? "",
   };
+};
+
+export interface FetchedDir {
+  ok: true;
+  /** Absolute path to the skill directory inside the temp clone. */
+  dir: string;
+  /** Call to delete the temp clone. */
+  cleanup: () => void;
+}
+
+export interface FetchError {
+  ok: false;
+  reason: string;
+}
+
+// Fetch one skill directory from its source repo via a shallow, blobless,
+// sparse git clone - cheap even for large monorepos (only the needed blobs
+// are downloaded).
+export const fetchUpstreamDir = (
+  origin: Pick<UpstreamOrigin, "repo" | "path" | "ref">,
+): FetchedDir | FetchError => {
+  const tmp = mkdtempSync(join(tmpdir(), "quiver-pull-"));
+  const cleanup = (): void => rmSync(tmp, { recursive: true, force: true });
+  const git = (args: string[], cwd?: string): void => {
+    execFileSync("git", args, {
+      cwd,
+      stdio: ["ignore", "ignore", "pipe"],
+      timeout: 120_000,
+    });
+  };
+
+  try {
+    git([
+      "clone",
+      "--depth",
+      "1",
+      "--filter=blob:none",
+      "--sparse",
+      "--branch",
+      origin.ref,
+      `https://github.com/${origin.repo}.git`,
+      tmp,
+    ]);
+    git(["sparse-checkout", "set", origin.path], tmp);
+  } catch (err) {
+    cleanup();
+    const msg =
+      err instanceof Error && "stderr" in err
+        ? String((err as { stderr: unknown }).stderr).trim().split("\n").pop()
+        : err instanceof Error
+          ? err.message
+          : "git clone failed";
+    return { ok: false, reason: msg || "git clone failed" };
+  }
+
+  const dir = resolve(tmp, origin.path);
+  if (!existsSync(resolve(dir, "SKILL.md"))) {
+    cleanup();
+    return { ok: false, reason: `no SKILL.md at ${origin.path} in ${origin.repo}` };
+  }
+  return { ok: true, dir, cleanup };
 };
 
 export type UpstreamStatus =

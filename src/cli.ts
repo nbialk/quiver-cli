@@ -28,6 +28,7 @@ Commands:
   status           Diff the lockfile against what is actually in the repo
   check            Detect upstream drift (skill digests, MCP tool snapshots)
   upstream         Check source repos for skill updates (catalog maintenance)
+  upstream pull    Pull latest upstream content into the catalog [skill]
   help             Show this help
   version          Show the quiver-cli version
 
