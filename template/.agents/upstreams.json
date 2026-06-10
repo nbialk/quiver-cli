@@ -1,0 +1,80 @@
+{
+  "skybridge": {
+    "repo": "alpic-ai/skybridge",
+    "path": "skills/skybridge",
+    "ref": "main",
+    "commit": "b0f194472191016846f4c55b9d53f58132e34125",
+    "fetchedAt": "2026-06-10T21:25:29.131Z"
+  },
+  "prisma-cli": {
+    "repo": "prisma/skills",
+    "path": "prisma-cli",
+    "ref": "main",
+    "commit": "32465eafa1c21d98fa9f5da4d2e8051513dbe7ae",
+    "fetchedAt": "2026-06-10T21:25:28.624Z"
+  },
+  "prisma-client-api": {
+    "repo": "prisma/skills",
+    "path": "prisma-client-api",
+    "ref": "main",
+    "commit": "720cdad61c0f799d63f6d8a1ff653131602bd74f",
+    "fetchedAt": "2026-06-10T21:25:28.916Z"
+  },
+  "vercel-react-best-practices": {
+    "repo": "vercel-labs/agent-skills",
+    "path": "skills/react-best-practices",
+    "ref": "main",
+    "commit": "dc8367e6f91c022d83361f03c3313fa05e848ee5",
+    "fetchedAt": "2026-06-10T21:25:29.336Z"
+  },
+  "posthog": {
+    "repo": "PostHog/skills",
+    "path": "skills/posthog",
+    "ref": "main",
+    "curated": true,
+    "commit": "f322cbb89771c2cf5d3c2eafa973371633bef064",
+    "fetchedAt": "2026-06-10T21:25:28.397Z"
+  },
+  "find-skills": {
+    "repo": "vercel-labs/skills",
+    "path": "skills/find-skills",
+    "ref": "main",
+    "commit": "0b8fb22aaa7f82447d4befe1b6a95d30a5b279b8",
+    "fetchedAt": "2026-06-10T21:53:27.265Z"
+  },
+  "agent-browser": {
+    "repo": "vercel-labs/agent-browser",
+    "path": "skills/agent-browser",
+    "ref": "main",
+    "commit": "d33bdb36f3f7793c977e8c503e5962721b275db8",
+    "fetchedAt": "2026-06-10T21:53:26.883Z"
+  },
+  "skill-creator": {
+    "repo": "anthropics/skills",
+    "path": "skills/skill-creator",
+    "ref": "main",
+    "commit": "b9e19e6f44773509fbdd7001d77ff41a49a486c1",
+    "fetchedAt": "2026-06-10T21:53:29.520Z"
+  },
+  "impeccable": {
+    "repo": "pbakaus/impeccable",
+    "path": ".pi/skills/impeccable",
+    "ref": "main",
+    "commit": "5fbe37c97c915ab338a2904022a6e882f0e4d596",
+    "fetchedAt": "2026-06-10T21:53:27.586Z"
+  },
+  "langfuse": {
+    "repo": "langfuse/skills",
+    "path": "skills/langfuse",
+    "ref": "main",
+    "commit": "c39789078b848160a695947907db3ba40b7a2bce",
+    "fetchedAt": "2026-06-10T21:53:27.920Z"
+  },
+  "shadcn": {
+    "repo": "shadcn-ui/ui",
+    "path": "skills/shadcn",
+    "ref": "main",
+    "commit": "05eb2b968bdc769ad78df9628dc2260e1dec903c",
+    "fetchedAt": "2026-06-10T21:53:29.207Z"
+  }
+}
