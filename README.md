@@ -7,7 +7,14 @@ and Codex — with **lockfile-based drift awareness**.
 One thing done right: repo composition + drift detection. No marketplace, no
 extra agents, no command abstraction.
 
-## Install into a repo
+- **One source of truth** — `.agents/` + `quiver.lock`, committed to the repo.
+- **Native output** — `.claude/`, `.opencode/`, `.codex/`, `.mcp.json`,
+  `opencode.json` are generated and gitignored; each tool loads its own format.
+- **Drift detection** — content digests for skills/commands, tool snapshots for
+  MCP servers (including tool-description poisoning).
+- **Upstream awareness** — know when a source repo updates a skill you imported.
+
+## Quick start
 
 From the root of the target repository:
 
@@ -15,15 +22,23 @@ From the root of the target repository:
 pnpm dlx quiver-cli init
 ```
 
-This will:
+The interactive picker lets you select skills, commands and MCP servers from
+the catalog; quiver then materializes them into `.agents/`, writes
+`quiver.lock`, generates the native provider configs and patches `.gitignore`.
 
-1. Let you pick skills, commands and MCP servers from the catalog (interactive).
-2. Materialize the selected artifacts into the repo's `.agents/` (committed).
-3. Generate native provider configs and write `quiver.lock`.
-4. Add generated shims + `.env.local` to `.gitignore`.
+```bash
+git add .agents quiver.lock .gitignore
+git commit -m "chore: add agent config"
+```
 
-`.agents/` and `quiver.lock` are the source of truth and should be committed.
-The generated provider files are not.
+Restart your AI tool (Claude Code, opencode, Codex) to load the configs.
+Day to day:
+
+```bash
+quiver-cli add mcp:context7   # add one entry (skill:/command:/mcp:)
+quiver-cli sync               # regenerate provider configs from .agents/
+quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
+```
 
 ## Commands
 
