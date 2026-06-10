@@ -42,20 +42,25 @@ quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 
 ## Commands
 
-| Command                  | Description                                                       |
-| ------------------------ | ----------------------------------------------------------------- |
-| `quiver-cli init`        | Interactive picker; write native configs + `quiver.lock`          |
-| `quiver-cli add <id>`    | Add one entry (`skill:<name>`, `command:<name>`, `mcp:<name>`)    |
-| `quiver-cli remove <id>` | Remove one entry; keep lockfile + configs consistent              |
-| `quiver-cli sync`        | Regenerate provider shims from `.agents/`; warn on drift          |
-| `quiver-cli status`      | Diff the lockfile against what is actually in the repo (exit 1)   |
-| `quiver-cli check`       | Detect upstream drift (skill digests, MCP tool snapshots)         |
-| `quiver-cli upstream`    | Check source repos for skill updates (catalog maintenance)        |
-| `quiver-cli help`        | Show help                                                         |
+| Command                    | Description                                                       |
+| -------------------------- | ----------------------------------------------------------------- |
+| `quiver-cli init`          | Interactive picker; write native configs + `quiver.lock`          |
+| `quiver-cli add <id>`      | Add one entry (`skill:<name>`, `command:<name>`, `mcp:<name>`)    |
+| `quiver-cli remove <id>`   | Remove one entry; keep lockfile + configs consistent              |
+| `quiver-cli update [id]`   | Pull newer catalog content into `.agents/` (all or one entry)     |
+| `quiver-cli sync`          | Regenerate provider configs from `.agents/`; warn on drift        |
+| `quiver-cli list`          | Show installed entries incl. MCP tool counts (alias: `ls`)        |
+| `quiver-cli status`        | Diff the lockfile against what is actually in the repo (exit 1)   |
+| `quiver-cli check`         | Detect drift (skill digests, MCP tool snapshots)                  |
+| `quiver-cli upstream`      | Check source repos for skill updates (catalog maintenance)        |
+| `quiver-cli upstream pull` | Pull latest upstream content into the catalog (`[skill]`)         |
+| `quiver-cli help`          | Show help                                                         |
+| `quiver-cli version`       | Show the version (`-v`, `--version`)                              |
 
 Options: `-f/--force`, `--all/-y` (non-interactive), `--json`
-(status/check/upstream), `--introspect-stdio` (allow running stdio MCP servers
-during `check`).
+(status/check/upstream/list), `--providers=claude,opencode` (limit generated
+configs), `--introspect-stdio` (allow running stdio MCP servers during
+`check`).
 
 ## What gets generated
 
@@ -69,6 +74,11 @@ during `check`).
 `AGENTS.md` at the repo root is a symlink to `.agents/AGENTS.md` (created only
 when the catalog ships one); `CLAUDE.md` links to it. Codex reads skills and
 `AGENTS.md` natively from the repo, so no shims are emitted for those.
+
+By default configs are generated for all three tools. `init` asks which ones
+you use (or pass `--providers=claude,opencode`); the choice is stored in
+`quiver.lock`, and deselected tools have their generated files cleaned up on
+`sync`.
 
 ## The lockfile
 
@@ -110,9 +120,12 @@ commit touching each path:
 - Skills flagged `curated: true` are reported as **drift-curated** — they were
   modified after import, so changes must be reconciled by hand.
 
-Updating is manual: re-fetch with the skills CLI (`pnpm dlx skills add <repo>`),
-copy into the catalog, then `quiver-cli upstream` again to record the new
-baseline. `quiver-cli upstream --json` is CI-friendly (exit 1 on drift).
+`quiver-cli upstream pull [skill]` fetches the latest upstream content into the
+catalog via a shallow sparse git clone and records the new baseline. Curated
+skills are skipped unless `--force` is given. Repos consuming the catalog then
+pick the changes up with `quiver-cli update` (local modifications are never
+overwritten without `--force`). `quiver-cli upstream --json` is CI-friendly
+(exit 1 on drift).
 
 ## Secrets
 
