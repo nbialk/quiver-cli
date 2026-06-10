@@ -25,12 +25,14 @@ Commands:
   check            Detect upstream drift (skill digests, MCP tool snapshots)
   upstream         Check source repos for skill updates (catalog maintenance)
   help             Show this help
+  version          Show the quiver-cli version
 
 Options:
   -f, --force          Overwrite existing files
   --all, -y            Keep everything without prompting (non-interactive)
   --json               Machine-readable output (status/check/upstream)
   --introspect-stdio   Allow introspecting stdio MCP servers (runs foreign code)
+  -v, --version        Show the quiver-cli version
 `;
 
 const parse = (argv: string[]): { command: string; options: CliOptions } => {
@@ -100,6 +102,18 @@ const run = async (): Promise<void> => {
     case "-h":
       console.log(HELP);
       break;
+    case "version":
+    case "--version":
+    case "-v": {
+      const { readFileSync } = await import("node:fs");
+      const { resolve } = await import("node:path");
+      const { packageRoot } = await import("./catalog/resolve.js");
+      const pkg = JSON.parse(
+        readFileSync(resolve(packageRoot, "package.json"), "utf8"),
+      ) as { version: string };
+      console.log(pkg.version);
+      break;
+    }
     default:
       console.error(`Unknown command: ${command}\n`);
       console.log(HELP);
