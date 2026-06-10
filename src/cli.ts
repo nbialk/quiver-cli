@@ -20,7 +20,8 @@ Commands:
   init             Interactive picker over the catalog; write native configs + quiver.lock
   add <id>         Add a single catalog entry (skill:<name>, command:<name>, mcp:<name>)
   remove <id>      Remove a single entry; keep lockfile + configs consistent
-  sync             Pull catalog state into the repo (additive, warns on drift)
+  sync             Regenerate provider configs from .agents/ (warns on drift)
+  update [id]      Pull newer catalog content into .agents/ (all or one entry)
   list             Show installed entries (skills, commands, MCP tool counts)
   status           Diff the lockfile against what is actually in the repo
   check            Detect upstream drift (skill digests, MCP tool snapshots)
@@ -76,6 +77,11 @@ const run = async (): Promise<void> => {
     case "sync": {
       const { sync } = await import("./commands/sync.js");
       await sync(options);
+      break;
+    }
+    case "update": {
+      const { update } = await import("./commands/update.js");
+      await update(options);
       break;
     }
     case "list":
