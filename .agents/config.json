@@ -1,0 +1,25 @@
+{
+  "shared": {
+    "devCommand": "pnpm run dev"
+  },
+  "mcpServers": {
+    "context7": {
+      "transport": "http",
+      "url": "https://mcp.context7.com/mcp"
+    }
+  },
+  "claude": {
+    "settings": {
+      "permissions": {
+        "allow": [
+          "Bash(pnpm run:*)",
+          "Bash(pnpm exec:*)",
+          "Bash(gh pr:*)",
+          "Bash(gh release:*)",
+          "Bash(git:*)"
+        ]
+      },
+      "enableAllProjectMcpServers": true
+    }
+  }
+}

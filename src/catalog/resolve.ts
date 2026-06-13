@@ -10,16 +10,28 @@ export interface ResolvedCatalog {
   source: string;
   /** Absolute path to the catalog's .agents directory. */
   root: string;
+  /** Branch/tag for remote catalogs; absent/null for local. */
+  ref?: string | null;
+  /** Resolved commit SHA for remote catalogs; absent/null for local. */
+  resolved?: string | null;
+  /** ISO timestamp of the remote fetch; absent for local. */
+  fetchedAt?: string;
 }
 
 export const DEFAULT_CATALOG_SOURCE = "local:template/.agents";
 
+export interface ResolveCatalogOptions {
+  /** Commit SHA pinned in the lockfile (github: sources only). */
+  pinnedSha?: string | null;
+}
+
 // Resolve a catalog source string to an absolute .agents directory.
-// Only the bundled local catalog is supported in v1; remote (github:) sources
-// are reserved for a later phase but the scheme is already parsed here.
-export const resolveCatalog = (
+// local: points into the npm package; github: is fetched into the user cache
+// (content-addressed by commit SHA) and resolved to a local path.
+export const resolveCatalog = async (
   source: string = DEFAULT_CATALOG_SOURCE,
-): ResolvedCatalog => {
+  options: ResolveCatalogOptions = {},
+): Promise<ResolvedCatalog> => {
   const [scheme, ...rest] = source.split(":");
   const spec = rest.join(":");
 
@@ -32,9 +44,8 @@ export const resolveCatalog = (
   }
 
   if (scheme === "github") {
-    throw new Error(
-      "Remote (github:) catalogs are not supported yet. Use the bundled catalog.",
-    );
+    const { fetchRemoteCatalog } = await import("./remote.js");
+    return fetchRemoteCatalog(source, options);
   }
 
   throw new Error(`Unknown catalog source scheme: ${source}`);

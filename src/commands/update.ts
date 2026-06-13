@@ -50,8 +50,17 @@ export const update = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  const source = resolveCatalog(lock.catalog.source);
+  // Re-resolve the catalog ref (remote: branch/tag HEAD -> new SHA) so update
+  // pulls the latest published content; the lockfile pin moves with it.
+  const source = await resolveCatalog(lock.catalog.source);
   const sourceCatalog = loadCatalog(source);
+  const catalogMoved =
+    source.resolved != null && source.resolved !== lock.catalog.resolved;
+  if (catalogMoved) {
+    lock.catalog.ref = source.ref ?? lock.catalog.ref;
+    lock.catalog.resolved = source.resolved ?? null;
+    lock.catalog.fetchedAt = source.fetchedAt ?? new Date().toISOString();
+  }
   const { catalog: repoCatalog } = loadRepoCatalog(
     options.targetRoot,
     lock.catalog.source,
@@ -78,8 +87,10 @@ export const update = async (options: CliOptions): Promise<void> => {
     reports.push(report);
   }
 
-  if (changed) {
+  if (changed || catalogMoved) {
     writeLockfile(options.targetRoot, lock);
+  }
+  if (changed) {
     const { catalog } = loadRepoCatalog(options.targetRoot, lock.catalog.source);
     writeProviders(options.targetRoot, catalog, lock);
   }

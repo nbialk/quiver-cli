@@ -39,8 +39,12 @@ export const add = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  // New artifacts are sourced from the package catalog (the template).
-  const source = resolveCatalog(lock.catalog.source);
+  // New artifacts are sourced from the locked catalog. Remote catalogs are
+  // pinned to the lockfile's resolved SHA, so `add` is reproducible and a
+  // cache hit needs no network. `update` moves the pin forward.
+  const source = await resolveCatalog(lock.catalog.source, {
+    pinnedSha: lock.catalog.resolved,
+  });
   const sourceCatalog = loadCatalog(source);
 
   const skill = sourceCatalog.skills.find((s) => s.name === parsed.name);

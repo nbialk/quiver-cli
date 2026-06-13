@@ -28,7 +28,7 @@ export const upstream = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  const resolved = resolveCatalog();
+  const resolved = await resolveCatalog();
   const catalog = loadCatalog(resolved);
   const upstreams = loadUpstreams(resolved);
 
@@ -97,7 +97,7 @@ interface PullReport {
 // clone), then record the new baseline commit. Curated skills are skipped
 // unless --force is given.
 const pull = async (options: CliOptions): Promise<void> => {
-  const resolved = resolveCatalog();
+  const resolved = await resolveCatalog();
   const catalog = loadCatalog(resolved);
   const upstreams = loadUpstreams(resolved);
 

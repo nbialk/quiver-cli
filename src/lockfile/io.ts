@@ -40,12 +40,15 @@ export const writeLockfile = (targetRoot: string, lock: Lockfile): void => {
   writeFileSync(lockfilePath(targetRoot), JSON.stringify(ordered, null, 2) + "\n");
 };
 
-export const emptyLockfile = (catalogSource: string): Lockfile => ({
+export const emptyLockfile = (
+  catalogSource: string,
+  remote: { ref?: string | null; resolved?: string | null } = {},
+): Lockfile => ({
   version: LOCKFILE_VERSION,
   catalog: {
     source: catalogSource,
-    ref: null,
-    resolved: null,
+    ref: remote.ref ?? null,
+    resolved: remote.resolved ?? null,
     fetchedAt: new Date().toISOString(),
   },
   entries: {},

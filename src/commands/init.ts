@@ -6,7 +6,7 @@ import {
   skillToEntry,
 } from "../catalog/entries.js";
 import { materializeCatalog } from "../catalog/materialize.js";
-import { resolveCatalog } from "../catalog/resolve.js";
+import { DEFAULT_CATALOG_SOURCE, resolveCatalog } from "../catalog/resolve.js";
 import { emptyLockfile, lockfileExists, writeLockfile } from "../lockfile/io.js";
 import {
   entryId,
@@ -31,7 +31,13 @@ export const init = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  const source = resolveCatalog();
+  const catalogSource = options.catalog ?? DEFAULT_CATALOG_SOURCE;
+  const source = await resolveCatalog(catalogSource);
+  if (source.resolved) {
+    await ui.step(
+      `Catalog: ${source.source} @ ${source.resolved.slice(0, 12)}${source.ref ? ` (${source.ref})` : ""}`,
+    );
+  }
   const sourceCatalog = loadCatalog(source);
 
   const selection = await selectFromCatalog(sourceCatalog, {
@@ -51,7 +57,10 @@ export const init = async (options: CliOptions): Promise<void> => {
   );
   const catalog = loadCatalog(resolved);
 
-  const lock: Lockfile = emptyLockfile(resolved.source);
+  const lock: Lockfile = emptyLockfile(resolved.source, {
+    ref: source.ref ?? null,
+    resolved: source.resolved ?? null,
+  });
   lock.providers = providers;
   for (const skill of catalog.skills) {
     if (selection.skills.includes(skill.name)) {

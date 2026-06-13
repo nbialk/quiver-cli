@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "catalog": {
+    "source": "local:template/.agents",
+    "ref": null,
+    "resolved": null,
+    "fetchedAt": "2026-06-13T11:43:03.855Z"
+  },
+  "providers": [
+    "opencode"
+  ],
+  "entries": {
+    "command:cp": {
+      "type": "command",
+      "sourcePath": "commands/cp.md",
+      "digest": "sha256:b6fb7ab42372984a6cc3d814dae680f7ac1de4fb0bf769048d6e97a879ba0954"
+    },
+    "mcp:context7": {
+      "type": "mcp",
+      "transport": "http",
+      "configDigest": "sha256:c41554e5c6c2c8667833cfa08ed952fedc7130897008794f633045420bef23a3",
+      "tools": null,
+      "toolsFetchedAt": null
+    }
+  }
+}

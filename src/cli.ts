@@ -10,6 +10,8 @@ export interface CliOptions {
   introspectStdio: boolean;
   /** From --providers=a,b - validated by the consuming command. */
   providers: string[] | null;
+  /** From --catalog=<source> - catalog source for init. */
+  catalog: string | null;
   positionals: string[];
 }
 
@@ -29,6 +31,8 @@ Commands:
   check            Detect upstream drift (skill digests, MCP tool snapshots)
   upstream         Check source repos for skill updates (catalog maintenance)
   upstream pull    Pull latest upstream content into the catalog [skill]
+  login            Store a GitHub token for remote (github:) catalogs
+  logout           Remove the stored GitHub token
   help             Show this help
   version          Show the quiver-cli version
 
@@ -37,6 +41,7 @@ Options:
   --all, -y            Keep everything without prompting (non-interactive)
   --json               Machine-readable output (status/check/upstream/list)
   --providers=a,b      Generate configs only for these tools (claude, opencode, codex)
+  --catalog=<source>   Catalog source for init (e.g. github:owner/repo[/path][#ref])
   --introspect-stdio   Allow introspecting stdio MCP servers (runs foreign code)
   -v, --version        Show the quiver-cli version
 `;
@@ -55,6 +60,11 @@ const parse = (argv: string[]): { command: string; options: CliOptions } => {
         .filter(Boolean)
     : null;
 
+  const catalogFlag = rest.find((a) => a.startsWith("--catalog="));
+  const catalog = catalogFlag
+    ? catalogFlag.slice("--catalog=".length).trim() || null
+    : null;
+
   return {
     command,
     options: {
@@ -64,6 +74,7 @@ const parse = (argv: string[]): { command: string; options: CliOptions } => {
       json: flags.has("--json"),
       introspectStdio: flags.has("--introspect-stdio"),
       providers,
+      catalog,
       positionals,
     },
   };
@@ -123,6 +134,11 @@ const run = async (): Promise<void> => {
     case "login": {
       const { login } = await import("./commands/login.js");
       await login(options);
+      break;
+    }
+    case "logout": {
+      const { logout } = await import("./commands/logout.js");
+      await logout(options);
       break;
     }
     case "help":

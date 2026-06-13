@@ -117,6 +117,26 @@ export const error = async (message: string): Promise<void> => {
   else console.error(message);
 };
 
+// Masked text input. Returns null on cancel. Falls back to a plain readline
+// question (input visible) when clack is unavailable.
+export const password = async (message: string): Promise<string | null> => {
+  const clack = await loadClack();
+  if (clack) {
+    const value = await clack.password({ message });
+    if (clack.isCancel(value)) return null;
+    return value;
+  }
+  const { createInterface } = await import("node:readline");
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const answer = await new Promise<string>((res) => {
+    rl.question(`${message}: `, (a) => {
+      rl.close();
+      res(a);
+    });
+  });
+  return answer.trim() || null;
+};
+
 export interface Spinner {
   start: (message: string) => void;
   stop: (message: string) => void;

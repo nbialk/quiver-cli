@@ -9,7 +9,10 @@ import {
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
+import { resolveGithubToken } from "../github/auth.js";
 import type { ResolvedCatalog } from "./resolve.js";
+
+export { resetTokenCache, resolveGithubToken } from "../github/auth.js";
 
 export interface UpstreamOrigin {
   /** GitHub "owner/repo". */
@@ -58,36 +61,6 @@ export interface CommitError {
 }
 
 export type CommitResult = LatestCommit | CommitError;
-
-let cachedToken: string | null | undefined;
-
-// Try the gh CLI's stored token. Returns null if gh is missing or not logged in.
-const ghToken = (): string | null => {
-  try {
-    const out = execFileSync("gh", ["auth", "token"], {
-      encoding: "utf8",
-      timeout: 3000,
-      stdio: ["ignore", "pipe", "ignore"],
-    }).trim();
-    return out || null;
-  } catch {
-    return null;
-  }
-};
-
-// Resolve a GitHub token from (in order): GITHUB_TOKEN, GH_TOKEN, the gh CLI.
-// Cached for the process. Returns null to fall back to anonymous requests.
-export const resolveGithubToken = (): string | null => {
-  if (cachedToken !== undefined) return cachedToken;
-  cachedToken =
-    process.env["GITHUB_TOKEN"] ?? process.env["GH_TOKEN"] ?? ghToken();
-  return cachedToken;
-};
-
-// Test hook: reset the cached token between cases.
-export const resetTokenCache = (): void => {
-  cachedToken = undefined;
-};
 
 // Fetch the most recent commit SHA that touched a path on a given ref. Uses the
 // GitHub Commits API (no clone/download). GITHUB_TOKEN lifts the 60 req/h

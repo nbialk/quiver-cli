@@ -54,13 +54,15 @@ quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 | `quiver-cli check`         | Detect drift (skill digests, MCP tool snapshots)                  |
 | `quiver-cli upstream`      | Check source repos for skill updates (catalog maintenance)        |
 | `quiver-cli upstream pull` | Pull latest upstream content into the catalog (`[skill]`)         |
+| `quiver-cli login`         | Store a GitHub token for remote (`github:`) catalogs              |
+| `quiver-cli logout`        | Remove the stored GitHub token                                    |
 | `quiver-cli help`          | Show help                                                         |
 | `quiver-cli version`       | Show the version (`-v`, `--version`)                              |
 
 Options: `-f/--force`, `--all/-y` (non-interactive), `--json`
 (status/check/upstream/list), `--providers=claude,opencode` (limit generated
-configs), `--introspect-stdio` (allow running stdio MCP servers during
-`check`).
+configs), `--catalog=<source>` (catalog source for `init`),
+`--introspect-stdio` (allow running stdio MCP servers during `check`).
 
 ## What gets generated
 
@@ -126,6 +128,44 @@ skills are skipped unless `--force` is given. Repos consuming the catalog then
 pick the changes up with `quiver-cli update` (local modifications are never
 overwritten without `--force`). `quiver-cli upstream --json` is CI-friendly
 (exit 1 on drift).
+
+## Remote catalogs
+
+By default `init` uses the catalog bundled with the package. Teams can host
+their own catalog in a GitHub repo and point `init` at it:
+
+```bash
+quiver-cli init --catalog github:acme/agent-catalog            # .agents at repo root
+quiver-cli init --catalog github:acme/monorepo/tools/.agents   # subdirectory
+quiver-cli init --catalog github:acme/agent-catalog#v2         # branch or tag
+```
+
+The source is recorded in `quiver.lock` together with the **resolved commit
+SHA** (`catalog.ref` / `catalog.resolved`):
+
+- `add` installs from the pinned SHA — reproducible, and served from the local
+  cache without network when possible.
+- `update` re-resolves the ref (branch/tag HEAD), moves the pin forward and
+  pulls newer content into `.agents/`.
+
+Catalogs are downloaded via the GitHub tarball API and cached under
+`~/.cache/quiver/catalogs/` (content-addressed by commit SHA, immutable).
+
+### Private repos & `login`
+
+For private catalog repos (and to lift API rate limits), provide a GitHub
+token. Resolution order: `GITHUB_TOKEN` → `GH_TOKEN` → the token stored by
+`quiver-cli login` → the `gh` CLI.
+
+```bash
+quiver-cli login                      # interactive: paste a PAT (masked)
+gh auth token | quiver-cli login      # non-interactive: token from stdin
+quiver-cli logout                     # remove the stored token
+```
+
+`login` validates the token against the GitHub API and stores it in
+`~/.config/quiver/auth.json` (mode `0600`). The token needs read access to the
+catalog repo.
 
 ## Secrets
 
