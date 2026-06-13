@@ -61,7 +61,7 @@ quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 
 Options: `-f/--force`, `--all/-y` (non-interactive), `--json`
 (status/check/upstream/list), `--providers=claude,opencode` (limit generated
-configs), `--catalog=<source>` (catalog source for `init`),
+configs), `--catalog=<source>` (catalog source for `init` and `upstream`),
 `--introspect-stdio` (allow running stdio MCP servers during `check`).
 
 ## What gets generated
@@ -106,9 +106,17 @@ introspected with `--introspect-stdio`.
 
 ## `upstream` — source updates
 
-`check` detects drift between the lockfile and the repo's `.agents/`. `upstream`
-answers a different question: **has the source repo updated a skill since it was
+`upstream` is a **catalog-maintenance** command, not a per-repo one. `check`
+detects drift between the lockfile and the repo's `.agents/`; `upstream` answers
+a different question: **has the source repo updated a skill since it was
 imported into the catalog?**
+
+Because it records baselines (and `pull` rewrites skill copies) **in the catalog
+itself**, run it where the catalog is writable — inside the quiver-cli repo, or
+against a writable local checkout via `--catalog <path>`. Run from a consuming
+repo, where the catalog is the read-only installed package (or a remote cache),
+it aborts with guidance; use `quiver-cli check` / `quiver-cli update` there
+instead.
 
 Origins live in `template/.agents/upstreams.json` (`repo`, `path`, `ref` per
 skill). `quiver-cli upstream` queries the GitHub Commits API for the latest

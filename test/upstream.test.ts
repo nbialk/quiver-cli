@@ -1,5 +1,15 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { chmodSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, sep } from "node:path";
 
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import {
+  isCatalogWritable,
+  packageRoot,
+  type ResolvedCatalog,
+} from "../src/catalog/resolve.js";
+import { upstream } from "../src/commands/upstream.js";
 import {
   evaluateOrigin,
   resetTokenCache,
@@ -7,6 +17,18 @@ import {
   type CommitResult,
   type UpstreamOrigin,
 } from "../src/catalog/upstreams.js";
+
+const cliOptions = (over: Record<string, unknown> = {}) => ({
+  targetRoot: process.cwd(),
+  force: false,
+  all: false,
+  json: false,
+  introspectStdio: false,
+  providers: null,
+  catalog: null,
+  positionals: [],
+  ...over,
+});
 
 const origin = (over: Partial<UpstreamOrigin> = {}): UpstreamOrigin => ({
   repo: "owner/repo",
@@ -70,6 +92,62 @@ describe("evaluateOrigin", () => {
     expect(report.reason).toBe("rate-limited");
     expect(changed).toBe(false);
     expect(o.commit).toBe("b".repeat(40));
+  });
+});
+
+describe("isCatalogWritable", () => {
+  const local = (root: string): ResolvedCatalog => ({
+    source: `local:${root}`,
+    root,
+  });
+
+  it("treats remote (github:) catalogs as read-only", () => {
+    const dir = mkdtempSync(join(tmpdir(), "quiver-cat-"));
+    try {
+      const remote: ResolvedCatalog = { source: "github:owner/repo", root: dir };
+      expect(isCatalogWritable(remote)).toBe(false);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("allows the bundled catalog from a source checkout (not node_modules)", () => {
+    // The test run resolves packageRoot to the repo's src/, which is not under
+    // node_modules, so the bundled catalog is writable.
+    expect(packageRoot.split(sep).includes("node_modules")).toBe(false);
+    const dir = mkdtempSync(join(tmpdir(), "quiver-cat-"));
+    try {
+      expect(isCatalogWritable(local(dir))).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("returns false for a non-existent catalog path", () => {
+    const dir = join(tmpdir(), "quiver-cat-missing-xyz");
+    expect(isCatalogWritable(local(dir))).toBe(false);
+  });
+});
+
+describe("upstream guard", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    process.exitCode = undefined;
+  });
+
+  it("aborts without fetching when the catalog is not writable", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const dir = mkdtempSync(join(tmpdir(), "quiver-ro-"));
+    chmodSync(dir, 0o500); // read + execute, no write
+
+    try {
+      await upstream(cliOptions({ catalog: `local:${dir}` }) as never);
+      expect(fetchSpy).not.toHaveBeenCalled();
+      expect(process.exitCode).toBe(1);
+    } finally {
+      chmodSync(dir, 0o700);
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

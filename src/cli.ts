@@ -29,7 +29,8 @@ Commands:
   list             Show installed entries (skills, commands, MCP tool counts)
   status           Diff the lockfile against what is actually in the repo
   check            Detect upstream drift (skill digests, MCP tool snapshots)
-  upstream         Check source repos for skill updates (catalog maintenance)
+  upstream         Catalog maintenance: check source repos for skill updates
+                   (run in the quiver-cli repo or with a writable --catalog)
   upstream pull    Pull latest upstream content into the catalog [skill]
   login            Store a GitHub token for remote (github:) catalogs
   logout           Remove the stored GitHub token

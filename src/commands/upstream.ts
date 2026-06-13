@@ -2,7 +2,12 @@ import { cpSync, rmSync } from "node:fs";
 
 import type { CliOptions } from "../cli.js";
 import { loadCatalog } from "../catalog/discover.js";
-import { resolveCatalog } from "../catalog/resolve.js";
+import {
+  DEFAULT_CATALOG_SOURCE,
+  isCatalogWritable,
+  resolveCatalog,
+  type ResolvedCatalog,
+} from "../catalog/resolve.js";
 import {
   evaluateOrigin,
   fetchLatestCommit,
@@ -28,7 +33,10 @@ export const upstream = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  const resolved = await resolveCatalog();
+  const resolved = await resolveCatalog(
+    options.catalog ?? DEFAULT_CATALOG_SOURCE,
+  );
+  if (await guardWritableCatalog(resolved)) return;
   const catalog = loadCatalog(resolved);
   const upstreams = loadUpstreams(resolved);
 
@@ -71,6 +79,26 @@ export const upstream = async (options: CliOptions): Promise<void> => {
   if (hasDrift) process.exitCode = 1;
 };
 
+// upstream/pull update baselines and skill copies in the catalog itself. When
+// the catalog is the installed package (read-only store) or a remote cache,
+// abort with guidance instead of attempting writes that silently fail. Returns
+// true if the command should stop.
+const guardWritableCatalog = async (
+  catalog: ResolvedCatalog,
+): Promise<boolean> => {
+  if (isCatalogWritable(catalog)) return false;
+  await ui.error(
+    "upstream is a catalog-maintenance command and the catalog here is not " +
+      "writable (the installed package or a remote cache).\n" +
+      "Run it inside the quiver-cli repo, or point at a writable local " +
+      "catalog with --catalog <path>.\n" +
+      "To update a consuming repo's installed entries, use quiver-cli check " +
+      "/ quiver-cli update instead.",
+  );
+  process.exitCode = 1;
+  return true;
+};
+
 // Status display order: actionable first, then noise.
 const STATUS_ORDER: Record<UpstreamReport["status"], number> = {
   drift: 0,
@@ -97,7 +125,10 @@ interface PullReport {
 // clone), then record the new baseline commit. Curated skills are skipped
 // unless --force is given.
 const pull = async (options: CliOptions): Promise<void> => {
-  const resolved = await resolveCatalog();
+  const resolved = await resolveCatalog(
+    options.catalog ?? DEFAULT_CATALOG_SOURCE,
+  );
+  if (await guardWritableCatalog(resolved)) return;
   const catalog = loadCatalog(resolved);
   const upstreams = loadUpstreams(resolved);
 

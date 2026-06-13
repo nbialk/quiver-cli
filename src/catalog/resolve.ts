@@ -1,5 +1,5 @@
-import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { accessSync, constants, existsSync } from "node:fs";
+import { dirname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 // dist/cli.js -> package root is one level up from dist/.
@@ -49,6 +49,34 @@ export const resolveCatalog = async (
   }
 
   throw new Error(`Unknown catalog source scheme: ${source}`);
+};
+
+const isInstalledPackage = (): boolean =>
+  packageRoot.split(sep).includes("node_modules");
+
+const isBundledCatalog = (catalog: ResolvedCatalog): boolean => {
+  const rel = relative(packageRoot, catalog.root);
+  return rel === "" || !rel.startsWith("..");
+};
+
+// Whether the catalog can be safely written to (baseline updates, pull). The
+// bundled `local:template/.agents` catalog is writable when quiver-cli runs
+// from its own source checkout, but read-only when it ships inside an installed
+// package (npm/pnpm store: immutable, content-addressed) — detected via a
+// `node_modules` segment in packageRoot. Remote (github:) catalogs resolve to a
+// content-addressed cache and are always treated as read-only. As a final
+// guard, a path the filesystem refuses to write is read-only too.
+export const isCatalogWritable = (catalog: ResolvedCatalog): boolean => {
+  const [scheme] = catalog.source.split(":");
+  if (scheme === "github") return false;
+  if (isBundledCatalog(catalog) && isInstalledPackage()) return false;
+
+  try {
+    accessSync(catalog.root, constants.W_OK);
+    return true;
+  } catch {
+    return false;
+  }
 };
 
 export { packageRoot };
