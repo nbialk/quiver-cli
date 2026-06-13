@@ -1,6 +1,6 @@
 {
   "name": "quiver-cli",
-  "version": "1.0.0-alpha.0",
+  "version": "0.1.0",
   "description": "Compose a selected subset of skills, commands & MCP servers from a central catalog into any repo as native configs for opencode, Claude Code and Codex - with lockfile-based drift awareness.",
   "type": "module",
   "bin": {
@@ -43,7 +43,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "prepare": "tsup"
+    "prepack": "pnpm build",
+    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "license": "MIT",
   "repository": {
