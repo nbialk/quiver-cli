@@ -36,16 +36,21 @@ export const check = async (options: CliOptions): Promise<void> => {
   const skillByName = new Map(catalog.skills.map((s) => [s.name, s]));
   const commandByName = new Map(catalog.commands.map((c) => [c.name, c]));
   const skillDrift: SkillDriftItem[] = [];
+  const checked = { skills: 0, commands: 0, mcp: 0 };
 
   for (const [id, entry] of Object.entries(lock.entries)) {
     const p = parseEntryId(id);
     if (!p) continue;
     if (entry.type === "skill") {
       const cat = skillByName.get(p.name);
-      if (cat && cat.digest !== entry.digest) skillDrift.push({ id, kind: "content" });
+      if (!cat) continue;
+      checked.skills += 1;
+      if (cat.digest !== entry.digest) skillDrift.push({ id, kind: "content" });
     } else if (entry.type === "command") {
       const cat = commandByName.get(p.name);
-      if (cat && cat.digest !== entry.digest) skillDrift.push({ id, kind: "content" });
+      if (!cat) continue;
+      checked.commands += 1;
+      if (cat.digest !== entry.digest) skillDrift.push({ id, kind: "content" });
     }
   }
 
@@ -58,6 +63,7 @@ export const check = async (options: CliOptions): Promise<void> => {
     const p = parseEntryId(id)!;
     const catMcp = catalog.mcp.find((m) => m.name === p.name);
     if (!catMcp) continue;
+    checked.mcp += 1;
 
     const server = interpolateEnvVars(catMcp.server);
     const res = await introspect(server, { allowStdio: options.introspectStdio });
@@ -95,7 +101,7 @@ export const check = async (options: CliOptions): Promise<void> => {
   if (options.json) {
     console.log(
       JSON.stringify(
-        { ok: !hasDrift, skillDrift, mcp: mcpReports },
+        { ok: !hasDrift, checked, skillDrift, mcp: mcpReports },
         null,
         2,
       ),
@@ -104,13 +110,20 @@ export const check = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  await report(skillDrift, mcpReports);
+  await report(skillDrift, mcpReports, checked);
   if (hasDrift) process.exitCode = 1;
 };
+
+export interface CheckedCounts {
+  skills: number;
+  commands: number;
+  mcp: number;
+}
 
 const report = async (
   skillDrift: SkillDriftItem[],
   mcpReports: McpReport[],
+  checked: CheckedCounts,
 ): Promise<void> => {
   if (skillDrift.length) {
     await ui.warn(
@@ -145,9 +158,23 @@ const report = async (
     }
   }
 
+  const summary = summarize(checked);
   if (!skillDrift.length && !mcpReports.some((r) => r.status === "drift")) {
-    await ui.success("check passed: no upstream drift detected.");
+    await ui.success(`check passed: ${summary}, no drift detected.`);
+  } else {
+    await ui.info(`checked ${summary}.`);
   }
+};
+
+// "4 skills, 1 command, 1 MCP server" - omits zero counts, pluralizes.
+export const summarize = (c: CheckedCounts): string => {
+  const plural = (n: number, word: string): string =>
+    `${n} ${word}${n === 1 ? "" : "s"}`;
+  const parts: string[] = [];
+  if (c.skills) parts.push(plural(c.skills, "skill"));
+  if (c.commands) parts.push(plural(c.commands, "command"));
+  if (c.mcp) parts.push(plural(c.mcp, "MCP server"));
+  return parts.length ? parts.join(", ") : "nothing";
 };
 
 const truncate = (s: string, max = 120): string =>
