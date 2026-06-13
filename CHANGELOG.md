@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/nbialk/quiver-cli/compare/v0.1.0...v0.2.0) (2026-06-13)
+
+
+### Features
+
+* **catalog:** add improve skill ([a86022f](https://github.com/nbialk/quiver-cli/commit/a86022fe826956dea779c715150be8313daf95b2))
+* **check:** summarize how many entries were checked ([9f1c5e1](https://github.com/nbialk/quiver-cli/commit/9f1c5e18786cc1d8ed4f8e892d85b5f8cfb8b616))
+
+
+### Bug Fixes
+
+* **upstream:** abort when the catalog is not writable ([00aa545](https://github.com/nbialk/quiver-cli/commit/00aa545083ec4803781dd650ccc1d77233fe72bc))
+
 ## 0.1.0 (2026-06-13)
 
 
