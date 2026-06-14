@@ -2,7 +2,7 @@ import type { Catalog } from "../catalog/discover.js";
 import * as ui from "../ui/prompts.js";
 
 const DEFAULT_SKILLS = ["find-skills", "skill-creator"];
-const DEFAULT_COMMANDS = ["cp"];
+const DEFAULT_COMMANDS = ["cp", "review"];
 
 export interface Selection {
   skills: string[];

@@ -1,40 +1,27 @@
 ---
 description: Commit and push all current changes using Conventional Commits
+subtask: true
 ---
 
-You are a git commit assistant. Your job is to stage all changes, create well-formed Conventional Commit messages, and push to the remote.
+You are a git commit assistant. Your job is to stage changes, create well-formed Conventional Commit messages, and push to the remote.
+
+## Context
+
+Status:
+!`git status`
+
+Summary:
+!`git diff --stat`
 
 ## Steps
 
 ### 1. Inspect Changes
 
-Run these commands to understand the current state:
-
-```bash
-git status
-git diff --stat
-```
+Review the status and summary above to understand the current state.
 
 If there are no changes (nothing to commit), respond with "Nothing to commit." and stop.
 
-### 2. Prisma Migration Check
-
-If `prisma/schema.prisma` appears in the changed files, verify that migration files also exist in the changeset:
-
-```bash
-SCHEMA_CHANGED=$(git diff --name-only HEAD -- prisma/schema.prisma)
-MIGRATION_CHANGED=$(git diff --name-only HEAD -- prisma/migrations/)
-```
-
-If `SCHEMA_CHANGED` is non-empty but `MIGRATION_CHANGED` is empty, a migration is missing. Create one:
-
-1. Run `pnpm run db:migrate` and provide a descriptive migration name when prompted.
-2. After the migration is created, verify it exists in `prisma/migrations/`.
-3. The new migration files will be included in the commit automatically (via `git add -A`).
-
-If both are non-empty or schema is unchanged, proceed normally.
-
-### 3. Analyze Changes
+### 2. Analyze Changes
 
 Review the diff to understand what changed:
 
@@ -42,13 +29,13 @@ Review the diff to understand what changed:
 git diff HEAD
 ```
 
-### 4. Split Commits if Necessary
+### 3. Split Commits if Necessary
 
 If changes are **unrelated** (e.g., a bug fix and a new feature), split them into separate commits. Each commit must represent **one logical change**.
 
-To split: stage files selectively with `git add <file>`, commit, then repeat.
+To split: stage the relevant files selectively with `git add <file>`, commit, then repeat for the next logical change.
 
-### 5. Select Commit Type
+### 4. Select Commit Type
 
 Choose the most accurate type:
 
@@ -64,7 +51,7 @@ Choose the most accurate type:
 | `chore`    | Tooling, config, deps               |
 | `ci`       | CI/CD only                          |
 
-### 6. Compose Commit Message
+### 5. Compose Commit Message
 
 Format: `<type>(<scope>): <subject>`
 
@@ -88,17 +75,21 @@ Format: `<type>(<scope>): <subject>`
 
 **Forbidden subjects:** `update`, `wip`, `changes`, `fix stuff`, `misc`
 
-### 7. Execute
+### 6. Execute
+
+Stage only the files belonging to the current logical change — never use `git add -A`:
 
 ```bash
-git add -A
+git add <file1> <file2> ...
 git commit -m "<message>"
-git push -u origin HEAD
 ```
 
-If splitting commits, repeat the add/commit cycle per logical change, then push once at the end.
+If splitting commits, repeat the add/commit cycle per logical change. Push once at the end:
 
-### 8. Report
+- If the current branch has no upstream, set it: `git push -u origin HEAD`
+- Otherwise: `git push`
+
+### 7. Report
 
 After pushing, show a summary:
 
@@ -110,6 +101,7 @@ Pushed to <branch>:
 
 ## Rules
 
+- Stage selectively per logical change; NEVER use `git add -A`.
 - NEVER amend existing commits.
 - NEVER force push.
 - NEVER create empty commits.
