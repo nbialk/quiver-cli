@@ -57,7 +57,7 @@ quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 | `quiver-cli login`         | Store a GitHub token for remote (`github:`) catalogs              |
 | `quiver-cli logout`        | Remove the stored GitHub token                                    |
 | `quiver-cli help`          | Show help                                                         |
-| `quiver-cli version`       | Show the version (`-v`, `--version`)                              |
+| `quiver-cli version`       | Show the version + any available update (`-v`, `--version`)       |
 
 Options: `-f/--force`, `--all/-y` (non-interactive), `--json`
 (status/check/upstream/list), `--providers=claude,opencode` (limit generated
@@ -182,6 +182,20 @@ repo root (gitignored). `init`/`add` generate an `.env.local.example` listing
 exactly the variables the selected servers need (none needed → no file). For
 Codex, secret headers are mapped to `env_http_headers` so secrets never land in
 the committed `config.toml`.
+
+## Staying up to date
+
+quiver-cli checks npm for a newer release (at most once a day, cached under
+`~/.cache/quiver/`) and prints a one-line notice after a command when an update
+is available. `quiver-cli version` checks on demand. Update with:
+
+```bash
+pnpm add -g quiver-cli   # or: npm i -g quiver-cli / yarn global add quiver-cli
+```
+
+The check is best-effort and never blocks or fails a command. It is silenced
+automatically for `--json`, non-interactive shells and CI, and can be disabled
+entirely with `QUIVER_NO_UPDATE_NOTIFIER=1`.
 
 ## Development
 

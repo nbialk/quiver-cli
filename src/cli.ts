@@ -150,19 +150,48 @@ const run = async (): Promise<void> => {
     case "version":
     case "--version":
     case "-v": {
-      const { readFileSync } = await import("node:fs");
-      const { resolve } = await import("node:path");
-      const { packageRoot } = await import("./catalog/resolve.js");
-      const pkg = JSON.parse(
-        readFileSync(resolve(packageRoot, "package.json"), "utf8"),
-      ) as { version: string };
-      console.log(pkg.version);
+      const { checkForUpdate, installHint } = await import(
+        "./version/notifier.js"
+      );
+      const info = await checkForUpdate({ force: true });
+      console.log(info.current);
+      if (info.updateAvailable) {
+        console.log(
+          `update available: ${info.latest}  (run: ${installHint()})`,
+        );
+      }
       break;
     }
     default:
       console.error(`Unknown command: ${command}\n`);
       console.log(HELP);
       process.exitCode = 1;
+  }
+
+  // Passive update notice after the command's own output. `version` does its
+  // own (forced) check; help/version need no nudge.
+  if (!["version", "--version", "-v", "help", "--help", "-h"].includes(command)) {
+    await maybeNotifyUpdate(options.json);
+  }
+};
+
+// Best-effort: never throws, never changes the command's exit code.
+const maybeNotifyUpdate = async (json: boolean): Promise<void> => {
+  try {
+    const { checkForUpdate, notifierSuppressed, installHint } = await import(
+      "./version/notifier.js"
+    );
+    if (notifierSuppressed(json)) return;
+    const info = await checkForUpdate();
+    if (!info.updateAvailable) return;
+    const c = ui.palette();
+    console.log(
+      `\n${c.yellow("▲")} ${c.bold("update available")} ${c.dim(
+        info.current,
+      )} → ${c.cyan(info.latest!)}   ${c.dim(`run: ${installHint()}`)}`,
+    );
+  } catch {
+    // Ignore notifier failures entirely.
   }
 };
 
