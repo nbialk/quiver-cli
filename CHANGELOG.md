@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/nbialk/quiver-cli/compare/v0.2.0...v0.3.0) (2026-06-14)
+
+
+### Features
+
+* **cli:** notify when a newer version is available ([3d81668](https://github.com/nbialk/quiver-cli/commit/3d8166845e1bdc808a98c14aae20966fa604f928))
+
 ## [0.2.0](https://github.com/nbialk/quiver-cli/compare/v0.1.0...v0.2.0) (2026-06-13)
 
 
