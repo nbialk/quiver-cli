@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/nbialk/quiver-cli/compare/v0.3.0...v0.4.0) (2026-06-14)
+
+
+### Features
+
+* **commands:** add review command and refine cp commit assistant ([47ab3d9](https://github.com/nbialk/quiver-cli/commit/47ab3d9ad4fbac93ebe4691f5dc5c1853ce1715e))
+
 ## [0.3.0](https://github.com/nbialk/quiver-cli/compare/v0.2.0...v0.3.0) (2026-06-14)
 
 
