@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.6.0](https://github.com/nbialk/quiver-cli/compare/v0.5.0...v0.6.0) (2026-06-17)
+
+
+### Features
+
+* **version:** guard interactive commands against old Node ([1f42abe](https://github.com/nbialk/quiver-cli/commit/1f42abe886f59102a2b851dfa373854d8d47d471))
+
+
+### Bug Fixes
+
+* **init:** collect env vars only from selected MCP servers ([5c5084f](https://github.com/nbialk/quiver-cli/commit/5c5084fb5baaa812213f8a728a693bb0d03c1c66))
+
 ## [0.5.0](https://github.com/nbialk/quiver-cli/compare/v0.4.0...v0.5.0) (2026-06-17)
 
 
