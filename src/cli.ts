@@ -84,6 +84,19 @@ const parse = (argv: string[]): { command: string; options: CliOptions } => {
 const run = async (): Promise<void> => {
   const { command, options } = parse(process.argv.slice(2));
 
+  // Interactive pickers need clack (Node >= 20.12). Fail fast with an
+  // actionable message instead of silently degrading to the numbered fallback.
+  // Skip when running non-interactively (--all or no TTY): no prompts are shown.
+  if (process.stdin.isTTY && !options.all) {
+    const { checkNodeForCommand } = await import("./version/node-guard.js");
+    const guard = checkNodeForCommand(command);
+    if (!guard.ok) {
+      await ui.error(guard.message!);
+      process.exitCode = 1;
+      return;
+    }
+  }
+
   switch (command) {
     case "init": {
       const { init } = await import("./commands/init.js");

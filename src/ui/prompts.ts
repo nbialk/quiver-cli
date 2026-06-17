@@ -6,12 +6,24 @@
 type Clack = typeof import("@clack/prompts");
 
 let clackPromise: Promise<Clack | null> | undefined;
+let warnedClackUnavailable = false;
 
 export const loadClack = async (): Promise<Clack | null> => {
   if (clackPromise === undefined) {
     clackPromise = import("@clack/prompts").catch(() => null);
   }
-  return clackPromise;
+  const clack = await clackPromise;
+  // Surface the degraded experience once instead of silently falling back to
+  // the plain numbered prompts (commonly caused by Node < 20.12).
+  if (!clack && !warnedClackUnavailable) {
+    warnedClackUnavailable = true;
+    console.warn(
+      "  Interactive menu unavailable (could not load @clack/prompts). " +
+        "This usually means Node < 20.12 - upgrade Node for the full UI. " +
+        "Falling back to plain text input.",
+    );
+  }
+  return clack;
 };
 
 export const intro = async (message: string): Promise<void> => {
