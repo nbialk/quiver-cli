@@ -3,18 +3,29 @@
     "devCommand": "pnpm run dev"
   },
   "mcpServers": {
-    "playwright": {
+    "context7": {
+      "transport": "http",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "excalidraw": {
       "transport": "stdio",
       "command": "npx",
-      "args": ["-y", "@playwright/mcp@latest", "--isolated"]
+      "args": ["-y", "excalidraw-mcp"]
+    },
+    "langfuse": {
+      "transport": "http",
+      "url": "https://cloud.langfuse.com/api/public/mcp",
+      "headers": {
+        "Authorization": "Basic ${LANGFUSE_MCP_TOKEN}"
+      }
     },
     "langfuse-docs": {
       "transport": "http",
       "url": "https://langfuse.com/api/mcp"
     },
-    "context7": {
+    "linear": {
       "transport": "http",
-      "url": "https://mcp.context7.com/mcp"
+      "url": "https://mcp.linear.app/mcp"
     },
     "neon": {
       "transport": "http",
@@ -23,24 +34,26 @@
         "Authorization": "Bearer ${NEON_API_KEY}"
       }
     },
-    "vercel": {
-      "transport": "http",
-      "url": "https://mcp.vercel.com"
-    },
     "notion": {
       "transport": "http",
       "url": "https://mcp.notion.com/mcp"
+    },
+    "playwright": {
+      "transport": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest", "--isolated"]
     },
     "posthog": {
       "transport": "http",
       "url": "https://mcp.posthog.com/mcp"
     },
-    "langfuse": {
+    "sentry": {
       "transport": "http",
-      "url": "https://cloud.langfuse.com/api/public/mcp",
-      "headers": {
-        "Authorization": "Basic ${LANGFUSE_MCP_TOKEN}"
-      }
+      "url": "https://mcp.sentry.dev/mcp"
+    },
+    "vercel": {
+      "transport": "http",
+      "url": "https://mcp.vercel.com"
     }
   },
   "claude": {
