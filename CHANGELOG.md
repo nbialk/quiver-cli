@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/nbialk/quiver-cli/compare/v0.4.0...v0.5.0) (2026-06-17)
+
+
+### Features
+
+* **catalog:** add sentry, linear, and excalidraw MCP servers ([9f543b8](https://github.com/nbialk/quiver-cli/commit/9f543b89177e87ca3b8c898307ce5ba58b9b4a91))
+
 ## [0.4.0](https://github.com/nbialk/quiver-cli/compare/v0.3.0...v0.4.0) (2026-06-14)
 
 
