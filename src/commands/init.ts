@@ -102,7 +102,12 @@ export const init = async (options: CliOptions): Promise<void> => {
     );
   }
 
-  const envVars = collectEnvVars(catalog.config.mcpServers ?? {});
+  const selectedServers = Object.fromEntries(
+    catalog.mcp
+      .filter((m) => selection.mcp.includes(m.name))
+      .map((m) => [m.name, m.server]),
+  );
+  const envVars = collectEnvVars(selectedServers);
   if (envVars.length) {
     await ui.info(
       `MCP secrets needed: ${envVars.join(", ")} - fill them in .env.local (template: .env.local.example)`,
