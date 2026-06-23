@@ -3,8 +3,8 @@
     "repo": "alpic-ai/skybridge",
     "path": "skills/skybridge",
     "ref": "main",
-    "commit": "b0f194472191016846f4c55b9d53f58132e34125",
-    "fetchedAt": "2026-06-10T21:25:29.131Z"
+    "commit": "44b477a1db0832e5ff71474339a8a0b516328fb0",
+    "fetchedAt": "2026-06-23T16:27:05.493Z"
   },
   "prisma-cli": {
     "repo": "prisma/skills",
@@ -46,8 +46,8 @@
     "repo": "vercel-labs/agent-browser",
     "path": "skills/agent-browser",
     "ref": "main",
-    "commit": "d33bdb36f3f7793c977e8c503e5962721b275db8",
-    "fetchedAt": "2026-06-10T21:53:26.883Z"
+    "commit": "bd93bf0f820c027a50bf8c98f96d4e37a39c7e83",
+    "fetchedAt": "2026-06-23T16:26:57.342Z"
   },
   "skill-creator": {
     "repo": "anthropics/skills",
@@ -60,8 +60,8 @@
     "repo": "pbakaus/impeccable",
     "path": ".pi/skills/impeccable",
     "ref": "main",
-    "commit": "5fbe37c97c915ab338a2904022a6e882f0e4d596",
-    "fetchedAt": "2026-06-10T21:53:27.586Z"
+    "commit": "da18929df04fbfc0ad6526ff224cc3c21cf7d361",
+    "fetchedAt": "2026-06-23T16:27:00.866Z"
   },
   "langfuse": {
     "repo": "langfuse/skills",
@@ -78,8 +78,17 @@
     "fetchedAt": "2026-06-10T21:53:29.207Z"
   },
   "improve": {
-    "repo": "shadcn-ui/ui",
+    "repo": "shadcn/improve",
     "path": "skills/improve",
-    "ref": "main"
+    "ref": "main",
+    "commit": "bd0aff9ca6b5f195ad3dca54a96e3368c65dab67",
+    "fetchedAt": "2026-06-23T16:29:47.083Z"
+  },
+  "humanizer": {
+    "repo": "blader/humanizer",
+    "path": "",
+    "ref": "main",
+    "commit": "9600f2b7241cb4eed6ad803abee5ea01d67fe8e4",
+    "fetchedAt": "2026-06-23T16:25:46.439Z"
   }
 }
