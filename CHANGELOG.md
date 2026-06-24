@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.7.0](https://github.com/nbialk/quiver-cli/compare/v0.6.0...v0.7.0) (2026-06-24)
+
+
+### Features
+
+* **check:** add --verbose and --accept flags ([ba7d0c9](https://github.com/nbialk/quiver-cli/commit/ba7d0c98fffb70273e688cee669ccaccb1c18093))
+* **list:** align columns by visible width and add tool-count hint ([e371e93](https://github.com/nbialk/quiver-cli/commit/e371e939be3772a938bd41b1d852c7ef03c82051))
+
+
+### Documentation
+
+* add LICENSE, CONTRIBUTING and SECURITY ([0ee4419](https://github.com/nbialk/quiver-cli/commit/0ee4419212014f883e2073187809fe2f9d02b8f4))
+
 ## [0.6.0](https://github.com/nbialk/quiver-cli/compare/v0.5.0...v0.6.0) (2026-06-17)
 
 
