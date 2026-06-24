@@ -27,6 +27,7 @@ Commands:
   add <id>         Add a single catalog entry (skill:<name>, command:<name>, mcp:<name>)
   remove <id>      Remove a single entry; keep lockfile + configs consistent
   sync             Regenerate provider configs from .agents/ (warns on drift)
+  providers [a,b]  Change which tools get configs (claude, opencode, codex)
   update [id]      Pull newer catalog content into .agents/ (all or one entry)
   list             Show installed entries (skills, commands, MCP tool counts)
   status           Diff the lockfile against what is actually in the repo
@@ -45,7 +46,7 @@ Options:
   --json               Machine-readable output (status/check/upstream/list)
   -V, --verbose        Show full tool lists and description diffs (check)
   --accept             Record the current MCP tool snapshots as the new baseline (check)
-  --providers=a,b      Generate configs only for these tools (claude, opencode, codex)
+  --providers=a,b      Generate configs only for these tools (init, sync, providers)
   --catalog=<source>   Catalog source for init (e.g. github:owner/repo[/path][#ref])
   --introspect-stdio   Allow introspecting stdio MCP servers (runs foreign code)
   -v, --version        Show the quiver-cli version
@@ -123,6 +124,11 @@ const run = async (): Promise<void> => {
     case "sync": {
       const { sync } = await import("./commands/sync.js");
       await sync(options);
+      break;
+    }
+    case "providers": {
+      const { providers } = await import("./commands/providers.js");
+      await providers(options);
       break;
     }
     case "update": {

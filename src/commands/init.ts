@@ -8,13 +8,8 @@ import {
 import { materializeCatalog } from "../catalog/materialize.js";
 import { DEFAULT_CATALOG_SOURCE, resolveCatalog } from "../catalog/resolve.js";
 import { emptyLockfile, lockfileExists, writeLockfile } from "../lockfile/io.js";
-import {
-  entryId,
-  isProvider,
-  PROVIDERS,
-  type Lockfile,
-  type Provider,
-} from "../lockfile/schema.js";
+import { entryId, type Lockfile } from "../lockfile/schema.js";
+import { resolveProviders } from "../providers/resolve.js";
 import { writeProviders } from "../providers/write.js";
 import { collectEnvVars } from "../secrets/interpolate.js";
 import * as ui from "../ui/prompts.js";
@@ -117,41 +112,4 @@ export const init = async (options: CliOptions): Promise<void> => {
   await ui.outro(
     "Done. Commit .agents/ and quiver.lock; restart your AI tool to load the config.",
   );
-};
-
-// Resolve target providers: --providers= flag wins, then an interactive
-// multiselect (default: all), falling back to all when non-interactive.
-// Returns null when the flag contains invalid values (error already shown).
-const resolveProviders = async (
-  options: CliOptions,
-): Promise<Provider[] | null> => {
-  if (options.providers) {
-    const invalid = options.providers.filter((p) => !isProvider(p));
-    if (invalid.length) {
-      await ui.error(
-        `Unknown provider(s): ${invalid.join(", ")}. Valid: ${PROVIDERS.join(", ")}.`,
-      );
-      process.exitCode = 1;
-      return null;
-    }
-    return options.providers.filter(isProvider);
-  }
-
-  if (options.all || !process.stdin.isTTY) return [...PROVIDERS];
-
-  const picked = await ui.selectGrouped<Provider>({
-    message: "Generate configs for (space toggles, enter confirms)",
-    groups: [
-      {
-        name: "providers",
-        items: [
-          { value: "claude", label: "Claude Code" },
-          { value: "opencode", label: "opencode" },
-          { value: "codex", label: "Codex" },
-        ],
-      },
-    ],
-    initialValues: [...PROVIDERS],
-  });
-  return picked.length ? picked : [...PROVIDERS];
 };

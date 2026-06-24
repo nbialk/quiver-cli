@@ -1,8 +1,9 @@
 import type { CliOptions } from "../cli.js";
 import { loadRepoCatalog, repoCatalogExists } from "../catalog/repo.js";
 import { readLockfile, writeLockfile } from "../lockfile/io.js";
-import { parseEntryId } from "../lockfile/schema.js";
-import { writeProviders } from "../providers/write.js";
+import { parseEntryId, PROVIDERS } from "../lockfile/schema.js";
+import { validateProviders } from "../providers/resolve.js";
+import { formatWriteResult, writeProviders } from "../providers/write.js";
 import * as ui from "../ui/prompts.js";
 import { ignoredSourcePaths } from "./gitignore.js";
 import { refreshLockDigests } from "./locksync.js";
@@ -18,6 +19,26 @@ export const sync = async (options: CliOptions): Promise<void> => {
     await ui.error("No .agents/ directory found. Run `quiver-cli init` first.");
     process.exitCode = 1;
     return;
+  }
+
+  // Optional provider change: --providers=a,b updates the lockfile's active
+  // providers before regenerating configs (deselected ones get cleaned up).
+  if (options.providers) {
+    const { providers: valid, invalid } = validateProviders(options.providers);
+    if (invalid) {
+      await ui.error(
+        `Unknown provider(s): ${invalid.join(", ")}. Valid: ${PROVIDERS.join(", ")}.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+    if (!valid!.length) {
+      await ui.error("At least one provider is required.");
+      process.exitCode = 1;
+      return;
+    }
+    lock.providers = valid!;
+    await ui.step(`Providers set to: ${valid!.join(", ")}`);
   }
 
   const { catalog } = loadRepoCatalog(options.targetRoot, lock.catalog.source);
@@ -63,4 +84,6 @@ export const sync = async (options: CliOptions): Promise<void> => {
   await ui.success(
     `Synced: ${result.generated.length} generated, ${result.linked.length} linked, ${result.removed.length} removed`,
   );
+  const detail = formatWriteResult(options.targetRoot, result);
+  if (detail.length) ui.block(detail);
 };

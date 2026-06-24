@@ -1,5 +1,5 @@
 import { existsSync, lstatSync } from "node:fs";
-import { basename, resolve } from "node:path";
+import { basename, relative, resolve } from "node:path";
 
 import type { Catalog, McpServer } from "../catalog/discover.js";
 import { PROVIDERS, type Lockfile, type Provider } from "../lockfile/schema.js";
@@ -141,6 +141,27 @@ export const writeProviders = (
     );
   }
   return result;
+};
+
+// Render an ApplyResult as grouped, sorted lines with paths relative to the
+// target root. Empty categories are omitted; returns [] when nothing changed.
+export const formatWriteResult = (
+  targetRoot: string,
+  result: ApplyResult,
+): string[] => {
+  const rel = (p: string) => relative(targetRoot, p) || p;
+  const lines: string[] = [];
+  const groups: [string, string[]][] = [
+    ["generated", result.generated],
+    ["linked", result.linked],
+    ["removed", result.removed],
+  ];
+  for (const [label, paths] of groups) {
+    if (!paths.length) continue;
+    lines.push(`  ${label}:`);
+    for (const p of [...paths].map(rel).sort()) lines.push(`    - ${p}`);
+  }
+  return lines;
 };
 
 // Returns a list of human-readable mismatches (empty = in sync).

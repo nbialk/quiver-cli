@@ -8,7 +8,13 @@ export const MIN_NODE = "20.12.0";
 
 // Commands that open interactive multiselect prompts and therefore depend on
 // clack being loadable. Non-interactive commands keep working on older Node.
-export const INTERACTIVE_COMMANDS = new Set(["init", "add", "remove", "rm"]);
+export const INTERACTIVE_COMMANDS = new Set([
+  "init",
+  "add",
+  "remove",
+  "rm",
+  "providers",
+]);
 
 const parse = (v: string): [number, number, number] => {
   const [major = 0, minor = 0, patch = 0] = v
