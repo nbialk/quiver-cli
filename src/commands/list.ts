@@ -9,10 +9,16 @@ import {
 } from "../lockfile/schema.js";
 import * as ui from "../ui/prompts.js";
 
-const truncate = (s: string, max = 60): string => {
+const truncate = (s: string, max: number): string => {
   const flat = s.replace(/\s+/g, " ").trim();
+  if (max < 1) return "";
   return flat.length > max ? flat.slice(0, max - 1) + "…" : flat;
 };
+
+// Right-pad on visible width, then colorize, so ANSI codes never break column
+// alignment.
+const padCell = (text: string, width: number, color: (s: string) => string): string =>
+  color(text.padEnd(width));
 
 // Show what is installed according to quiver.lock, including MCP tool counts
 // from the recorded snapshots.
@@ -79,22 +85,28 @@ export const list = async (options: CliOptions): Promise<void> => {
   }
 
   const c = ui.palette();
+  const term = process.stdout.columns ?? 80;
   const lines: string[] = [""];
-  const width = Math.max(
-    0,
-    ...[...skills, ...commands, ...mcp].map((e) => e.name.length + 1),
-  );
 
   if (skills.length) {
+    const nameW = Math.max(...skills.map((e) => e.name.length));
+    const verW = Math.max(
+      0,
+      ...skills.map((e) =>
+        e.entry.frontmatter.version ? e.entry.frontmatter.version.length + 1 : 0,
+      ),
+    );
+    // 4 indent + nameW + 1 gap + verW + 1 gap = description start column.
+    const descMax = term - (4 + nameW + 1 + verW + 1) - 1;
     lines.push(`  ${c.bold("skills")}`);
     for (const { name, entry } of skills) {
-      const version = entry.frontmatter.version
-        ? c.cyan(`v${entry.frontmatter.version} `)
-        : "";
+      const ver = entry.frontmatter.version
+        ? padCell(`v${entry.frontmatter.version}`, verW, c.cyan)
+        : " ".repeat(verW);
       const desc = entry.frontmatter.description
-        ? c.dim(truncate(entry.frontmatter.description))
+        ? c.dim(truncate(entry.frontmatter.description, descMax))
         : "";
-      lines.push(`    ${name.padEnd(width)} ${version}${desc}`);
+      lines.push(`    ${name.padEnd(nameW)} ${ver} ${desc}`.trimEnd());
     }
   }
 
@@ -105,15 +117,27 @@ export const list = async (options: CliOptions): Promise<void> => {
     }
   }
 
+  let missingTools = false;
   if (mcp.length) {
+    const nameW = Math.max(...mcp.map((e) => e.name.length));
+    const toolW = Math.max(
+      ...mcp.map((e) => {
+        const n = e.entry.tools ? Object.keys(e.entry.tools).length : null;
+        return `${n ?? "?"} tools`.length;
+      }),
+    );
     lines.push("", `  ${c.bold("mcp servers")}`);
     for (const { name, entry } of mcp) {
-      const tools = entry.tools
-        ? c.green(`${Object.keys(entry.tools).length} tools`)
-        : c.dim("tools: ? (run check)");
+      const count = entry.tools ? Object.keys(entry.tools).length : null;
+      if (count === null) missingTools = true;
+      const tools = padCell(
+        `${count ?? "?"} tools`,
+        toolW,
+        count === null ? c.dim : c.green,
+      );
       const detail = serverDetail.get(name);
       lines.push(
-        `    ${name.padEnd(width)} ${entry.transport.padEnd(5)} ${tools}` +
+        `    ${name.padEnd(nameW)} ${entry.transport.padEnd(5)} ${tools}` +
           (detail ? `  ${c.dim(detail)}` : ""),
       );
     }
@@ -127,7 +151,10 @@ export const list = async (options: CliOptions): Promise<void> => {
     `  ${c.bold(
       `${skills.length} skills · ${commands.length} commands · ${mcp.length} MCP servers`,
     )}  ${c.dim(`providers: ${providers}`)}`,
-    "",
   );
+  if (missingTools) {
+    lines.push(`  ${c.dim("run 'quiver-cli check' to populate tool counts")}`);
+  }
+  lines.push("");
   ui.block(lines);
 };
