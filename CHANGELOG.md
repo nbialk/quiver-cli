@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/nbialk/quiver-cli/compare/v0.7.0...v0.8.0) (2026-06-24)
+
+
+### Features
+
+* **providers:** add command to change active config providers ([2fb2aec](https://github.com/nbialk/quiver-cli/commit/2fb2aec758d9cddc140273960362c148260038af))
+
 ## [0.7.0](https://github.com/nbialk/quiver-cli/compare/v0.6.0...v0.7.0) (2026-06-24)
 
 
