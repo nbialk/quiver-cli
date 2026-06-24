@@ -7,6 +7,8 @@ export interface CliOptions {
   force: boolean;
   all: boolean;
   json: boolean;
+  verbose: boolean;
+  accept: boolean;
   introspectStdio: boolean;
   /** From --providers=a,b - validated by the consuming command. */
   providers: string[] | null;
@@ -41,6 +43,8 @@ Options:
   -f, --force          Overwrite existing files
   --all, -y            Keep everything without prompting (non-interactive)
   --json               Machine-readable output (status/check/upstream/list)
+  -V, --verbose        Show full tool lists and description diffs (check)
+  --accept             Record the current MCP tool snapshots as the new baseline (check)
   --providers=a,b      Generate configs only for these tools (claude, opencode, codex)
   --catalog=<source>   Catalog source for init (e.g. github:owner/repo[/path][#ref])
   --introspect-stdio   Allow introspecting stdio MCP servers (runs foreign code)
@@ -73,6 +77,8 @@ const parse = (argv: string[]): { command: string; options: CliOptions } => {
       force: flags.has("--force") || flags.has("-f"),
       all: flags.has("--all") || flags.has("--yes") || flags.has("-y"),
       json: flags.has("--json"),
+      verbose: flags.has("--verbose") || flags.has("-V"),
+      accept: flags.has("--accept"),
       introspectStdio: flags.has("--introspect-stdio"),
       providers,
       catalog,

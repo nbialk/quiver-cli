@@ -15,7 +15,7 @@ interface SkillDriftItem {
 
 interface McpReport {
   id: string;
-  status: "ok" | "baseline" | "skipped" | "drift";
+  status: "ok" | "baseline" | "skipped" | "drift" | "accepted";
   reason?: string;
   diff?: ToolDiff;
 }
@@ -87,6 +87,12 @@ export const check = async (options: CliOptions): Promise<void> => {
     const diff = diffSnapshots(mcpEntry.tools, current);
     if (isEmptyDiff(diff)) {
       mcpReports.push({ id, status: "ok" });
+    } else if (options.accept) {
+      // Record the current snapshot as the new baseline.
+      mcpEntry.tools = current;
+      mcpEntry.toolsFetchedAt = new Date().toISOString();
+      lockChanged = true;
+      mcpReports.push({ id, status: "accepted", diff });
     } else {
       mcpReports.push({ id, status: "drift", diff });
     }
@@ -110,7 +116,7 @@ export const check = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  await report(skillDrift, mcpReports, checked);
+  await report(skillDrift, mcpReports, checked, options);
   if (hasDrift) process.exitCode = 1;
 };
 
@@ -124,6 +130,7 @@ const report = async (
   skillDrift: SkillDriftItem[],
   mcpReports: McpReport[],
   checked: CheckedCounts,
+  options: CliOptions,
 ): Promise<void> => {
   if (skillDrift.length) {
     await ui.warn(
@@ -133,37 +140,106 @@ const report = async (
     );
   }
 
-  for (const r of mcpReports) {
-    if (r.status === "ok") {
-      await ui.success(`${r.id}: no tool changes`);
-    } else if (r.status === "baseline") {
-      await ui.info(`${r.id}: recorded tool baseline`);
-    } else if (r.status === "skipped") {
-      await ui.info(`${r.id}: skipped (${r.reason})`);
-    } else if (r.status === "drift" && r.diff) {
-      const lines: string[] = [];
-      if (r.diff.added.length) lines.push(`new tools: ${r.diff.added.join(", ")}`);
-      if (r.diff.removed.length)
-        lines.push(`removed tools: ${r.diff.removed.join(", ")}`);
-      if (r.diff.schemaChanged.length)
-        lines.push(`schema changed: ${r.diff.schemaChanged.join(", ")}`);
-      for (const dc of r.diff.descriptionChanged) {
-        lines.push(
-          `DESCRIPTION CHANGED (possible poisoning) "${dc.name}":\n` +
-            `      before: ${truncate(dc.before)}\n` +
-            `      after:  ${truncate(dc.after)}`,
-        );
-      }
-      await ui.warn(`${r.id}: tool drift\n  - ${lines.join("\n  - ")}`);
-    }
+  // Skipped servers (e.g. stdio without --introspect-stdio) are the common,
+  // expected case - collapse them into a single line instead of one each.
+  const skipped = mcpReports.filter((r) => r.status === "skipped");
+  if (skipped.length) {
+    const names = skipped.map((r) => parseEntryId(r.id)?.name ?? r.id);
+    await ui.info(
+      `skipped ${skipped.length} server${skipped.length === 1 ? "" : "s"}: ${names.join(", ")}` +
+        (options.verbose
+          ? "\n  - " +
+            skipped.map((r) => `${r.id}: ${r.reason}`).join("\n  - ")
+          : ""),
+    );
+  }
+
+  const baselined = mcpReports.filter((r) => r.status === "baseline");
+  if (baselined.length) {
+    await ui.info(
+      `recorded tool baseline: ${baselined.map((r) => r.id).join(", ")}`,
+    );
+  }
+
+  const accepted = mcpReports.filter((r) => r.status === "accepted");
+  for (const r of accepted) {
+    await ui.success(`${r.id}: accepted new tool baseline`);
+  }
+
+  const drifted = mcpReports.filter((r) => r.status === "drift");
+  for (const r of drifted) {
+    if (!r.diff) continue;
+    await ui.warn(`${r.id}: tool drift\n  - ${driftLines(r.diff, options.verbose).join("\n  - ")}`);
   }
 
   const summary = summarize(checked);
-  if (!skillDrift.length && !mcpReports.some((r) => r.status === "drift")) {
+  const hasDrift = skillDrift.length > 0 || drifted.length > 0;
+  if (!hasDrift) {
     await ui.success(`check passed: ${summary}, no drift detected.`);
   } else {
-    await ui.info(`checked ${summary}.`);
+    await ui.info(`checked ${summary}, drift detected.`);
+    await recommend(skillDrift, drifted);
   }
+};
+
+// Render the body of a tool-drift warning. Long lists are summarized with a
+// count and a sample unless --verbose is given.
+const driftLines = (diff: ToolDiff, verbose: boolean): string[] => {
+  const lines: string[] = [];
+  if (diff.added.length) lines.push(`new tools: ${list(diff.added, verbose)}`);
+  if (diff.removed.length)
+    lines.push(`removed tools: ${list(diff.removed, verbose)}`);
+  if (diff.schemaChanged.length)
+    lines.push(`schema changed: ${list(diff.schemaChanged, verbose)}`);
+
+  if (diff.descriptionChanged.length) {
+    const dc = diff.descriptionChanged;
+    lines.push(
+      `description changed (possible poisoning): ${list(dc.map((d) => d.name), verbose)}`,
+    );
+    if (verbose) {
+      for (const d of dc) {
+        lines.push(
+          `  "${d.name}":\n` +
+            `      before: ${truncate(d.before)}\n` +
+            `      after:  ${truncate(d.after)}`,
+        );
+      }
+    }
+  }
+  return lines;
+};
+
+// "213 tools (a, b, c, … +210 more)" - or the full sorted list when verbose.
+const list = (names: string[], verbose: boolean, sample = 3): string => {
+  if (verbose || names.length <= sample) {
+    return `${names.length} ${names.length === 1 ? "tool" : "tools"} (${names.join(", ")})`;
+  }
+  const rest = names.length - sample;
+  return `${names.length} tools (${names.slice(0, sample).join(", ")}, … +${rest} more)`;
+};
+
+// Tell the user how to update the lockfile for the drift that was found.
+const recommend = async (
+  skillDrift: SkillDriftItem[],
+  drifted: McpReport[],
+): Promise<void> => {
+  const c = ui.palette();
+  const lines: string[] = ["to update the lockfile baseline:"];
+  if (drifted.length) {
+    lines.push(`  ${c.cyan("quiver-cli check --accept")}   accept the new MCP tool snapshots`);
+  }
+  if (skillDrift.length) {
+    const ids = skillDrift.map((s) => s.id);
+    const one = ids.length === 1 ? ids[0] : "<id>";
+    lines.push(
+      `  ${c.cyan(`quiver-cli update ${one}`)}   pull catalog content for the changed skill/command`,
+    );
+    if (ids.length > 1) {
+      lines.push(`  ${c.dim(`changed: ${ids.join(", ")}`)}`);
+    }
+  }
+  ui.block(["", ...lines]);
 };
 
 // "4 skills, 1 command, 1 MCP server" - omits zero counts, pluralizes.
