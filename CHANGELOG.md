@@ -1,5 +1,22 @@
 # Changelog
 
+## [1.0.0](https://github.com/nbialk/quiver-cli/compare/v0.8.0...v1.0.0) (2026-07-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* **auth:** drop login/logout in favor of env tokens and the gh CLI
+
+### Features
+
+* **auth:** drop login/logout in favor of env tokens and the gh CLI ([8bf5909](https://github.com/nbialk/quiver-cli/commit/8bf5909fac5891d437fd3e3b41c00122dc5705f9))
+* **check:** fold status into check and add --offline mode ([c6ba7a1](https://github.com/nbialk/quiver-cli/commit/c6ba7a1fe44d740bab85bf8b444ae02f78171fcc))
+
+
+### Code Refactoring
+
+* **cli:** reject unknown flags and export a testable entry point ([7d35ee9](https://github.com/nbialk/quiver-cli/commit/7d35ee98a87c907d914d3794fb580004322b7e8f))
+
 ## [0.8.0](https://github.com/nbialk/quiver-cli/compare/v0.7.0...v0.8.0) (2026-06-24)
 
 
