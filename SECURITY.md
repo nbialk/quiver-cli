@@ -14,10 +14,9 @@ acknowledge your report and work with you on a fix and coordinated disclosure.
 quiver-cli handles a few security-relevant concerns; please keep these in mind
 when reporting:
 
-- **GitHub tokens** — `quiver-cli login` stores a token in
-  `~/.config/quiver/auth.json` with mode `0600`. Tokens are also read from
-  `GITHUB_TOKEN`/`GH_TOKEN` and the `gh` CLI. Tokens are never written to
-  generated configs or the lockfile.
+- **GitHub tokens** — tokens for private (`github:`) catalogs are read from
+  `GITHUB_TOKEN`/`GH_TOKEN` or the `gh` CLI. quiver never persists tokens
+  itself, and never writes them to generated configs or the lockfile.
 - **MCP secrets** — `${VAR}` placeholders in MCP server configs resolve from
   `.env.local` (gitignored). For Codex, secret headers are mapped to
   `env_http_headers` so secrets stay out of the committed `config.toml`.

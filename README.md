@@ -54,8 +54,6 @@ quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 | `quiver-cli check`         | Detect drift (skill digests, MCP tool snapshots)                  |
 | `quiver-cli upstream`      | Check source repos for skill updates (catalog maintenance)        |
 | `quiver-cli upstream pull` | Pull latest upstream content into the catalog (`[skill]`)         |
-| `quiver-cli login`         | Store a GitHub token for remote (`github:`) catalogs              |
-| `quiver-cli logout`        | Remove the stored GitHub token                                    |
 | `quiver-cli help`          | Show help                                                         |
 | `quiver-cli version`       | Show the version + any available update (`-v`, `--version`)       |
 
@@ -159,21 +157,27 @@ SHA** (`catalog.ref` / `catalog.resolved`):
 Catalogs are downloaded via the GitHub tarball API and cached under
 `~/.cache/quiver/catalogs/` (content-addressed by commit SHA, immutable).
 
-### Private repos & `login`
+### Private repos & tokens
 
 For private catalog repos (and to lift API rate limits), provide a GitHub
-token. Resolution order: `GITHUB_TOKEN` → `GH_TOKEN` → the token stored by
-`quiver-cli login` → the `gh` CLI.
+token. Resolution order: `GITHUB_TOKEN` → `GH_TOKEN` → the `gh` CLI.
+
+**The cleanest way is the `gh` CLI** — no token to manage, just the familiar
+browser-confirm flow:
 
 ```bash
-quiver-cli login                      # interactive: paste a PAT (masked)
-gh auth token | quiver-cli login      # non-interactive: token from stdin
-quiver-cli logout                     # remove the stored token
+gh auth login        # browser confirmation; quiver picks up the token automatically
 ```
 
-`login` validates the token against the GitHub API and stores it in
-`~/.config/quiver/auth.json` (mode `0600`). The token needs read access to the
-catalog repo.
+Once `gh` is authenticated, quiver uses its token automatically. For CI or
+environments without `gh`, set `GITHUB_TOKEN` (or `GH_TOKEN`) instead:
+
+```bash
+GITHUB_TOKEN=ghp_… quiver-cli add mcp:context7
+```
+
+The token needs read access to the catalog repo. quiver never writes tokens to
+generated configs or the lockfile.
 
 ## Secrets
 

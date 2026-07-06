@@ -35,8 +35,6 @@ Commands:
   upstream         Catalog maintenance: check source repos for skill updates
                    (run in the quiver-cli repo or with a writable --catalog)
   upstream pull    Pull latest upstream content into the catalog [skill]
-  login            Store a GitHub token for remote (github:) catalogs
-  logout           Remove the stored GitHub token
   help             Show this help
   version          Show the quiver-cli version
 
@@ -155,16 +153,6 @@ const run = async (): Promise<void> => {
     case "upstream": {
       const { upstream } = await import("./commands/upstream.js");
       await upstream(options);
-      break;
-    }
-    case "login": {
-      const { login } = await import("./commands/login.js");
-      await login(options);
-      break;
-    }
-    case "logout": {
-      const { logout } = await import("./commands/logout.js");
-      await logout(options);
       break;
     }
     case "help":

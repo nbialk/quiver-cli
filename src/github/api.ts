@@ -20,11 +20,12 @@ const headers = (): Record<string, string> => {
 
 // Map common GitHub API failures to actionable messages.
 const failureReason = (status: number): string => {
-  if (status === 401) return "authentication failed - run `quiver-cli login` with a valid token";
+  if (status === 401)
+    return "authentication failed - set GITHUB_TOKEN or log in with the gh CLI";
   if (status === 403 || status === 429)
-    return "rate-limited or access denied (run `quiver-cli login` or set GITHUB_TOKEN)";
+    return "rate-limited or access denied (set GITHUB_TOKEN or log in with the gh CLI)";
   if (status === 404)
-    return "repo or ref not found (private repo? run `quiver-cli login`)";
+    return "repo or ref not found (private repo? set GITHUB_TOKEN or log in with the gh CLI)";
   return `HTTP ${status}`;
 };
 

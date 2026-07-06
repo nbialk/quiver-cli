@@ -1,37 +1,29 @@
-import { mkdtempSync, readFileSync, rmSync, statSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { resetTokenCache, resolveGithubToken } from "../src/github/auth.js";
 
-import {
-  authFilePath,
-  deleteStoredToken,
-  readStoredLogin,
-  readStoredToken,
-  resetTokenCache,
-  resolveGithubToken,
-  writeStoredToken,
-} from "../src/github/auth.js";
+// gh CLI is invoked via execFileSync; mock it so tests never shell out.
+vi.mock("node:child_process", () => ({
+  execFileSync: vi.fn(() => ""),
+}));
 
-describe("stored token (auth.json)", () => {
-  let tmp: string;
-  const originalXdg = process.env["XDG_CONFIG_HOME"];
+import { execFileSync } from "node:child_process";
+
+const mockedExecFileSync = vi.mocked(execFileSync);
+
+describe("resolveGithubToken", () => {
   const originalGithub = process.env["GITHUB_TOKEN"];
   const originalGh = process.env["GH_TOKEN"];
 
   beforeEach(() => {
-    tmp = mkdtempSync(join(tmpdir(), "quiver-auth-"));
-    process.env["XDG_CONFIG_HOME"] = tmp;
     delete process.env["GITHUB_TOKEN"];
     delete process.env["GH_TOKEN"];
+    mockedExecFileSync.mockReset();
+    mockedExecFileSync.mockReturnValue("");
     resetTokenCache();
   });
 
   afterEach(() => {
-    rmSync(tmp, { recursive: true, force: true });
-    if (originalXdg === undefined) delete process.env["XDG_CONFIG_HOME"];
-    else process.env["XDG_CONFIG_HOME"] = originalXdg;
     if (originalGithub === undefined) delete process.env["GITHUB_TOKEN"];
     else process.env["GITHUB_TOKEN"] = originalGithub;
     if (originalGh === undefined) delete process.env["GH_TOKEN"];
@@ -39,41 +31,42 @@ describe("stored token (auth.json)", () => {
     resetTokenCache();
   });
 
-  it("writes, reads and deletes the token", () => {
-    expect(readStoredToken()).toBeNull();
-    writeStoredToken("ghp_secret", "octocat");
-    expect(readStoredToken()).toBe("ghp_secret");
-    expect(readStoredLogin()).toBe("octocat");
-    expect(deleteStoredToken()).toBe(true);
-    expect(readStoredToken()).toBeNull();
-    expect(deleteStoredToken()).toBe(false);
+  it("prefers GITHUB_TOKEN over GH_TOKEN and the gh CLI", () => {
+    process.env["GITHUB_TOKEN"] = "primary";
+    process.env["GH_TOKEN"] = "secondary";
+    mockedExecFileSync.mockReturnValue("from-gh");
+    expect(resolveGithubToken()).toBe("primary");
+    expect(mockedExecFileSync).not.toHaveBeenCalled();
   });
 
-  it("creates auth.json with mode 0600", () => {
-    writeStoredToken("ghp_secret", "octocat");
-    const mode = statSync(authFilePath()).mode & 0o777;
-    expect(mode).toBe(0o600);
+  it("falls back to GH_TOKEN when GITHUB_TOKEN is unset", () => {
+    process.env["GH_TOKEN"] = "secondary";
+    mockedExecFileSync.mockReturnValue("from-gh");
+    expect(resolveGithubToken()).toBe("secondary");
+    expect(mockedExecFileSync).not.toHaveBeenCalled();
   });
 
-  it("writes valid JSON with a createdAt timestamp", () => {
-    writeStoredToken("ghp_secret", "octocat");
-    const parsed = JSON.parse(readFileSync(authFilePath(), "utf8")) as {
-      github: { token: string; login: string; createdAt: string };
-    };
-    expect(parsed.github.token).toBe("ghp_secret");
-    expect(parsed.github.createdAt).toMatch(/^\d{4}-/);
+  it("falls back to the gh CLI when no env tokens are set", () => {
+    mockedExecFileSync.mockReturnValue("from-gh\n");
+    expect(resolveGithubToken()).toBe("from-gh");
   });
 
-  it("env tokens take precedence over the stored token", () => {
-    writeStoredToken("ghp_stored", "octocat");
-    process.env["GITHUB_TOKEN"] = "ghp_env";
-    resetTokenCache();
-    expect(resolveGithubToken()).toBe("ghp_env");
+  it("returns null when nothing provides a token", () => {
+    mockedExecFileSync.mockReturnValue("");
+    expect(resolveGithubToken()).toBeNull();
   });
 
-  it("falls back to the stored token when env is unset", () => {
-    writeStoredToken("ghp_stored", "octocat");
-    resetTokenCache();
-    expect(resolveGithubToken()).toBe("ghp_stored");
+  it("returns null when the gh CLI is missing or errors", () => {
+    mockedExecFileSync.mockImplementation(() => {
+      throw new Error("gh not found");
+    });
+    expect(resolveGithubToken()).toBeNull();
+  });
+
+  it("caches the resolved token for the process", () => {
+    process.env["GITHUB_TOKEN"] = "first";
+    expect(resolveGithubToken()).toBe("first");
+    process.env["GITHUB_TOKEN"] = "second";
+    expect(resolveGithubToken()).toBe("first");
   });
 });
