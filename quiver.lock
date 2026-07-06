@@ -35,6 +35,17 @@
         }
       },
       "toolsFetchedAt": "2026-06-14T16:27:06.956Z"
+    },
+    "skill:improve": {
+      "type": "skill",
+      "sourcePath": "skills/code/improve",
+      "digest": "sha256:e2f901f7dd4af854bbc07022c08c5a0428617f585607b10745eb6a28c98feda9",
+      "pin": null,
+      "frontmatter": {
+        "name": "improve",
+        "description": "Survey any codebase as a senior advisor and produce prioritized, self-contained implementation plans for OTHER models/agents to execute. Strictly read-only on source code — never implements, fixes, or refactors anything itself. Use when asked to audit a codebase, find improvement opportunities (bugs, security, performance, test coverage, tech debt, migrations, DX), suggest features or where to take the project next (roadmap, product direction), or generate handoff plans for another agent to implement.",
+        "version": null
+      }
     }
   }
 }
