@@ -1,6 +1,6 @@
 {
   "name": "quiver-cli",
-  "version": "0.8.0",
+  "version": "1.0.0",
   "description": "Compose a selected subset of skills, commands & MCP servers from a central catalog into any repo as native configs for opencode, Claude Code and Codex - with lockfile-based drift awareness.",
   "type": "module",
   "bin": {
