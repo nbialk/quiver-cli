@@ -9,6 +9,7 @@ export interface CliOptions {
   json: boolean;
   verbose: boolean;
   accept: boolean;
+  offline: boolean;
   introspectStdio: boolean;
   /** From --providers=a,b - validated by the consuming command. */
   providers: string[] | null;
@@ -30,8 +31,8 @@ Commands:
   providers [a,b]  Change which tools get configs (claude, opencode, codex)
   update [id]      Pull newer catalog content into .agents/ (all or one entry)
   list             Show installed entries (skills, commands, MCP tool counts)
-  status           Diff the lockfile against what is actually in the repo
-  check            Detect upstream drift (skill digests, MCP tool snapshots)
+  check            Detect drift: skill digests, provider shims, MCP tool
+                   snapshots (--offline skips MCP re-introspection)
   upstream         Catalog maintenance: check source repos for skill updates
                    (run in the quiver-cli repo or with a writable --catalog)
   upstream pull    Pull latest upstream content into the catalog [skill]
@@ -41,9 +42,10 @@ Commands:
 Options:
   -f, --force          Overwrite existing files
   --all, -y            Keep everything without prompting (non-interactive)
-  --json               Machine-readable output (status/check/upstream/list)
+  --json               Machine-readable output (check/upstream/list)
   -V, --verbose        Show full tool lists and description diffs (check)
   --accept             Record the current MCP tool snapshots as the new baseline (check)
+  --offline            Skip MCP re-introspection; check digests + shims only (check)
   --providers=a,b      Generate configs only for these tools (init, sync, providers)
   --catalog=<source>   Catalog source for init (e.g. github:owner/repo[/path][#ref])
   --introspect-stdio   Allow introspecting stdio MCP servers (runs foreign code)
@@ -78,6 +80,7 @@ const parse = (argv: string[]): { command: string; options: CliOptions } => {
       json: flags.has("--json"),
       verbose: flags.has("--verbose") || flags.has("-V"),
       accept: flags.has("--accept"),
+      offline: flags.has("--offline"),
       introspectStdio: flags.has("--introspect-stdio"),
       providers,
       catalog,
@@ -138,11 +141,6 @@ const run = async (): Promise<void> => {
     case "ls": {
       const { list } = await import("./commands/list.js");
       await list(options);
-      break;
-    }
-    case "status": {
-      const { status } = await import("./commands/status.js");
-      await status(options);
       break;
     }
     case "check": {

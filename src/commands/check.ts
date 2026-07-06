@@ -5,6 +5,7 @@ import { parseEntryId, type McpEntry } from "../lockfile/schema.js";
 import { diffSnapshots, isEmptyDiff, type ToolDiff } from "../mcp/diff.js";
 import { introspect } from "../mcp/introspect.js";
 import { toSnapshot } from "../mcp/snapshot.js";
+import { checkProviders } from "../providers/write.js";
 import { interpolateEnvVars, loadEnvLocal } from "../secrets/interpolate.js";
 import * as ui from "../ui/prompts.js";
 
@@ -54,11 +55,16 @@ export const check = async (options: CliOptions): Promise<void> => {
     }
   }
 
+  // --- Provider shim drift (out-of-sync / missing / stale generated files) --
+  const shimProblems = checkProviders(options.targetRoot, catalog, lock);
+
   // --- MCP tool snapshot drift (re-introspection) --------------------------
+  // Skipped entirely in --offline mode (no network, no foreign code).
   const mcpReports: McpReport[] = [];
   let lockChanged = false;
 
   for (const [id, entry] of Object.entries(lock.entries)) {
+    if (options.offline) break;
     if (entry.type !== "mcp") continue;
     const p = parseEntryId(id)!;
     const catMcp = catalog.mcp.find((m) => m.name === p.name);
@@ -102,12 +108,14 @@ export const check = async (options: CliOptions): Promise<void> => {
   if (lockChanged) writeLockfile(options.targetRoot, lock);
 
   const hasDrift =
-    skillDrift.length > 0 || mcpReports.some((r) => r.status === "drift");
+    skillDrift.length > 0 ||
+    shimProblems.length > 0 ||
+    mcpReports.some((r) => r.status === "drift");
 
   if (options.json) {
     console.log(
       JSON.stringify(
-        { ok: !hasDrift, checked, skillDrift, mcp: mcpReports },
+        { ok: !hasDrift, checked, skillDrift, shims: shimProblems, mcp: mcpReports },
         null,
         2,
       ),
@@ -116,7 +124,7 @@ export const check = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  await report(skillDrift, mcpReports, checked, options);
+  await report(skillDrift, shimProblems, mcpReports, checked, options);
   if (hasDrift) process.exitCode = 1;
 };
 
@@ -128,6 +136,7 @@ export interface CheckedCounts {
 
 const report = async (
   skillDrift: SkillDriftItem[],
+  shimProblems: string[],
   mcpReports: McpReport[],
   checked: CheckedCounts,
   options: CliOptions,
@@ -137,6 +146,12 @@ const report = async (
       `Skill/command content changed since lockfile:\n  - ${skillDrift
         .map((s) => s.id)
         .join("\n  - ")}`,
+    );
+  }
+
+  if (shimProblems.length) {
+    await ui.warn(
+      `Provider shims out of date:\n  - ${shimProblems.join("\n  - ")}`,
     );
   }
 
@@ -173,12 +188,13 @@ const report = async (
   }
 
   const summary = summarize(checked);
-  const hasDrift = skillDrift.length > 0 || drifted.length > 0;
+  const hasDrift =
+    skillDrift.length > 0 || shimProblems.length > 0 || drifted.length > 0;
   if (!hasDrift) {
     await ui.success(`check passed: ${summary}, no drift detected.`);
   } else {
     await ui.info(`checked ${summary}, drift detected.`);
-    await recommend(skillDrift, drifted);
+    await recommend(skillDrift, shimProblems, drifted);
   }
 };
 
@@ -222,10 +238,14 @@ const list = (names: string[], verbose: boolean, sample = 3): string => {
 // Tell the user how to update the lockfile for the drift that was found.
 const recommend = async (
   skillDrift: SkillDriftItem[],
+  shimProblems: string[],
   drifted: McpReport[],
 ): Promise<void> => {
   const c = ui.palette();
   const lines: string[] = ["to update the lockfile baseline:"];
+  if (shimProblems.length) {
+    lines.push(`  ${c.cyan("quiver-cli sync")}   regenerate provider shims`);
+  }
   if (drifted.length) {
     lines.push(`  ${c.cyan("quiver-cli check --accept")}   accept the new MCP tool snapshots`);
   }

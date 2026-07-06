@@ -50,17 +50,17 @@ quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 | `quiver-cli update [id]`   | Pull newer catalog content into `.agents/` (all or one entry)     |
 | `quiver-cli sync`          | Regenerate provider configs from `.agents/`; warn on drift        |
 | `quiver-cli list`          | Show installed entries incl. MCP tool counts (alias: `ls`)        |
-| `quiver-cli status`        | Diff the lockfile against what is actually in the repo (exit 1)   |
-| `quiver-cli check`         | Detect drift (skill digests, MCP tool snapshots)                  |
+| `quiver-cli check`         | Detect drift: skill digests, provider shims, MCP tool snapshots   |
 | `quiver-cli upstream`      | Check source repos for skill updates (catalog maintenance)        |
 | `quiver-cli upstream pull` | Pull latest upstream content into the catalog (`[skill]`)         |
 | `quiver-cli help`          | Show help                                                         |
 | `quiver-cli version`       | Show the version + any available update (`-v`, `--version`)       |
 
 Options: `-f/--force`, `--all/-y` (non-interactive), `--json`
-(status/check/upstream/list), `--providers=claude,opencode` (limit generated
+(check/upstream/list), `--providers=claude,opencode` (limit generated
 configs), `--catalog=<source>` (catalog source for `init` and `upstream`),
-`--introspect-stdio` (allow running stdio MCP servers during `check`).
+`--offline` (skip MCP re-introspection during `check`), `--introspect-stdio`
+(allow running stdio MCP servers during `check`).
 
 ## What gets generated
 
@@ -84,12 +84,17 @@ you use (or pass `--providers=claude,opencode`); the choice is stored in
 
 `quiver.lock` records, per entry: source path, content digest, and — for MCP
 servers — a **tool snapshot** (`{ description, inputSchemaHash }` per tool).
-This is the basis for `status`, `sync` and `check`.
+This is the basis for `sync` and `check`.
 
 ## `check` — drift awareness
 
+`check` is the single drift command. It compares three things:
+
 - **Skills/commands**: compares the stored digest against the current `.agents/`
   content.
+- **Provider shims**: verifies the generated `.claude/`, `.opencode/`, `.codex/`
+  configs match the lockfile (missing, stale or out-of-sync files) → fix with
+  `quiver-cli sync`.
 - **MCP servers** (the real lever): re-introspects `tools/list` and diffs against
   the snapshot → new/removed tools, changed input schemas, and — security
   critical — **changed tool descriptions** (defends against tool-description
@@ -99,6 +104,10 @@ The first successful introspection records a baseline; subsequent `check` runs
 diff against it. Servers that fail introspection (e.g. requiring interactive
 OAuth) are reported as skipped. stdio servers run foreign code and are only
 introspected with `--introspect-stdio`.
+
+Pass `--offline` to skip MCP re-introspection entirely and check only digests
+and provider shims — no network, no foreign code, useful for a fast local
+sanity check.
 
 `quiver-cli check --json` is CI-friendly (exit 1 on drift).
 
