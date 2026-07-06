@@ -52,10 +52,40 @@ Options:
   -v, --version        Show the quiver-cli version
 `;
 
-const parse = (argv: string[]): { command: string; options: CliOptions } => {
+// Boolean flags (and their short aliases) the CLI understands.
+const KNOWN_FLAGS = new Set([
+  "--force",
+  "-f",
+  "--all",
+  "--yes",
+  "-y",
+  "--json",
+  "--verbose",
+  "-V",
+  "--accept",
+  "--offline",
+  "--introspect-stdio",
+  "--help",
+  "-h",
+  "--version",
+  "-v",
+]);
+
+// Flags that take an inline value, written as --name=value.
+const KNOWN_VALUE_FLAGS = ["--providers", "--catalog"];
+
+const isKnownFlag = (arg: string): boolean => {
+  if (KNOWN_FLAGS.has(arg)) return true;
+  return KNOWN_VALUE_FLAGS.some((f) => arg.startsWith(`${f}=`));
+};
+
+export const parse = (
+  argv: string[],
+): { command: string; options: CliOptions; unknownFlags: string[] } => {
   const [command = "init", ...rest] = argv;
   const flags = new Set(rest.filter((a) => a.startsWith("-")));
   const positionals = rest.filter((a) => !a.startsWith("-"));
+  const unknownFlags = [...flags].filter((a) => !isKnownFlag(a));
 
   const providersFlag = rest.find((a) => a.startsWith("--providers="));
   const providers = providersFlag
@@ -73,6 +103,7 @@ const parse = (argv: string[]): { command: string; options: CliOptions } => {
 
   return {
     command,
+    unknownFlags,
     options: {
       targetRoot: process.cwd(),
       force: flags.has("--force") || flags.has("-f"),
@@ -89,8 +120,17 @@ const parse = (argv: string[]): { command: string; options: CliOptions } => {
   };
 };
 
-const run = async (): Promise<void> => {
-  const { command, options } = parse(process.argv.slice(2));
+export const run = async (): Promise<void> => {
+  const { command, options, unknownFlags } = parse(process.argv.slice(2));
+
+  if (unknownFlags.length) {
+    await ui.error(
+      `Unknown option${unknownFlags.length === 1 ? "" : "s"}: ${unknownFlags.join(", ")}\n`,
+    );
+    console.log(HELP);
+    process.exitCode = 1;
+    return;
+  }
 
   // Interactive pickers need clack (Node >= 20.12). Fail fast with an
   // actionable message instead of silently degrading to the numbered fallback.
@@ -206,7 +246,9 @@ const maybeNotifyUpdate = async (json: boolean): Promise<void> => {
   }
 };
 
-run().catch(async (err) => {
-  await ui.error(err instanceof Error ? err.message : String(err));
-  process.exitCode = 1;
-});
+export const main = (): void => {
+  run().catch(async (err) => {
+    await ui.error(err instanceof Error ? err.message : String(err));
+    process.exitCode = 1;
+  });
+};
