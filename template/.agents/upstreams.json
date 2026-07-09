@@ -42,6 +42,14 @@
     "commit": "0b8fb22aaa7f82447d4befe1b6a95d30a5b279b8",
     "fetchedAt": "2026-06-10T23:11:39.944Z"
   },
+  "hermes-tweet": {
+    "repo": "Xquik-dev/hermes-tweet",
+    "path": "skills/hermes-tweet",
+    "ref": "master",
+    "commit": null,
+    "fetchedAt": null,
+    "curated": true
+  },
   "agent-browser": {
     "repo": "vercel-labs/agent-browser",
     "path": "skills/agent-browser",
