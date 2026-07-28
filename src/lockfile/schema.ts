@@ -1,7 +1,7 @@
 export const LOCKFILE_VERSION = 1 as const;
 export const LOCKFILE_NAME = "quiver.lock";
 
-export type EntryType = "skill" | "command" | "mcp";
+export type EntryType = "skill" | "command" | "mcp" | "plugin";
 
 export const PROVIDERS = ["claude", "opencode", "codex"] as const;
 export type Provider = (typeof PROVIDERS)[number];
@@ -56,7 +56,15 @@ export interface McpEntry {
   toolsFetchedAt: string | null;
 }
 
-export type LockEntry = SkillEntry | CommandEntry | McpEntry;
+export interface PluginEntry {
+  type: "plugin";
+  provider: "opencode";
+  sourcePath: string;
+  digest: string;
+  requires: string[];
+}
+
+export type LockEntry = SkillEntry | CommandEntry | McpEntry | PluginEntry;
 
 export interface Lockfile {
   version: typeof LOCKFILE_VERSION;
@@ -76,7 +84,14 @@ export const parseEntryId = (
   if (idx === -1) return null;
   const type = id.slice(0, idx);
   const name = id.slice(idx + 1);
-  if (type !== "skill" && type !== "command" && type !== "mcp") return null;
+  if (
+    type !== "skill" &&
+    type !== "command" &&
+    type !== "mcp" &&
+    type !== "plugin"
+  ) {
+    return null;
+  }
   if (!name) return null;
   return { type, name };
 };

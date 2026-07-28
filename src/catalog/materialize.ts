@@ -40,7 +40,16 @@ export const materializeCatalog = (
     cpSync(command.absPath, dest, { force: true });
   }
 
-  // Filtered config.json: keep only selected MCP servers, plus shared/claude.
+  // Provider plugins: copy selected source files into the repo catalog.
+  for (const plugin of catalog.plugins) {
+    if (!selection.plugins.includes(plugin.name)) continue;
+    const dest = resolve(destRoot, plugin.sourcePath);
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(plugin.absPath, dest, { force: true });
+  }
+
+  // Filtered config.json: keep only selected MCP servers/plugins, plus shared
+  // provider overlays.
   const filteredConfig: Record<string, unknown> = {};
   if (catalog.config.shared) filteredConfig["shared"] = catalog.config.shared;
   const mcpServers: Record<string, unknown> = {};
@@ -48,6 +57,14 @@ export const materializeCatalog = (
     if (selection.mcp.includes(mcp.name)) mcpServers[mcp.name] = mcp.server;
   }
   if (Object.keys(mcpServers).length) filteredConfig["mcpServers"] = mcpServers;
+  const plugins: Record<string, unknown> = {};
+  for (const plugin of catalog.plugins) {
+    if (!selection.plugins.includes(plugin.name)) continue;
+    plugins[plugin.name] = catalog.config.plugins?.[plugin.name];
+  }
+  if (Object.keys(plugins).length) filteredConfig["plugins"] = plugins;
+  if (catalog.config.opencode) filteredConfig["opencode"] = catalog.config.opencode;
+  if (catalog.config.tui) filteredConfig["tui"] = catalog.config.tui;
   if (catalog.config.claude) filteredConfig["claude"] = catalog.config.claude;
   writeFileSync(
     resolve(destRoot, "config.json"),

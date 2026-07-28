@@ -59,6 +59,8 @@ const buildPlan = (
     mcpServers,
     rawMcpServers,
     claudeSettings: catalog.config.claude?.settings ?? null,
+    opencodeConfig: catalog.config.opencode ?? null,
+    tuiConfig: catalog.config.tui ?? null,
   };
 
   // Plan all providers; deselected ones (lockfile `providers`) contribute

@@ -5,6 +5,7 @@ import {
   parseEntryId,
   type CommandEntry,
   type McpEntry,
+  type PluginEntry,
   type SkillEntry,
 } from "../lockfile/schema.js";
 import * as ui from "../ui/prompts.js";
@@ -48,14 +49,16 @@ export const list = async (options: CliOptions): Promise<void> => {
   const skills: { name: string; entry: SkillEntry }[] = [];
   const commands: { name: string; entry: CommandEntry }[] = [];
   const mcp: { name: string; entry: McpEntry }[] = [];
+  const plugins: { name: string; entry: PluginEntry }[] = [];
   for (const [id, entry] of Object.entries(lock.entries)) {
     const p = parseEntryId(id);
     if (!p) continue;
     if (entry.type === "skill") skills.push({ name: p.name, entry });
     else if (entry.type === "command") commands.push({ name: p.name, entry });
     else if (entry.type === "mcp") mcp.push({ name: p.name, entry });
+    else if (entry.type === "plugin") plugins.push({ name: p.name, entry });
   }
-  for (const group of [skills, commands, mcp] as { name: string }[][]) {
+  for (const group of [skills, commands, mcp, plugins] as { name: string }[][]) {
     group.sort((a, b) => a.name.localeCompare(b.name));
   }
 
@@ -75,6 +78,11 @@ export const list = async (options: CliOptions): Promise<void> => {
             transport: entry.transport,
             detail: serverDetail.get(name) ?? null,
             toolCount: entry.tools ? Object.keys(entry.tools).length : null,
+          })),
+          plugins: plugins.map(({ name, entry }) => ({
+            name,
+            provider: entry.provider,
+            requires: entry.requires,
           })),
         },
         null,
@@ -143,13 +151,24 @@ export const list = async (options: CliOptions): Promise<void> => {
     }
   }
 
+
+  if (plugins.length) {
+    lines.push("", `  ${c.bold("plugins")}`);
+    for (const { name, entry } of plugins) {
+      const requires = entry.requires.length
+        ? `  ${c.dim(`requires: ${entry.requires.join(", ")}`)}`
+        : "";
+      lines.push(`    ${name} ${c.dim(entry.provider)}${requires}`);
+    }
+  }
+
   const providers = lock.providers?.length
     ? lock.providers.join(", ")
     : "claude, opencode, codex";
   lines.push(
     "",
     `  ${c.bold(
-      `${skills.length} skills · ${commands.length} commands · ${mcp.length} MCP servers`,
+      `${skills.length} skills · ${commands.length} commands · ${mcp.length} MCP servers · ${plugins.length} plugins`,
     )}  ${c.dim(`providers: ${providers}`)}`,
   );
   if (missingTools) {

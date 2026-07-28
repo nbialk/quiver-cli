@@ -47,6 +47,7 @@ export const sync = async (options: CliOptions): Promise<void> => {
   const haveSkills = new Set(catalog.skills.map((s) => s.name));
   const haveCommands = new Set(catalog.commands.map((c) => c.name));
   const haveMcp = new Set(catalog.mcp.map((m) => m.name));
+  const havePlugins = new Set(catalog.plugins.map((p) => p.name));
   const orphans: string[] = [];
   for (const id of Object.keys(lock.entries)) {
     const p = parseEntryId(id);
@@ -54,7 +55,8 @@ export const sync = async (options: CliOptions): Promise<void> => {
     const present =
       (p.type === "skill" && haveSkills.has(p.name)) ||
       (p.type === "command" && haveCommands.has(p.name)) ||
-      (p.type === "mcp" && haveMcp.has(p.name));
+      (p.type === "mcp" && haveMcp.has(p.name)) ||
+      (p.type === "plugin" && havePlugins.has(p.name));
     if (!present) orphans.push(id);
   }
   if (orphans.length) {

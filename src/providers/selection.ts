@@ -2,6 +2,7 @@ import type {
   Catalog,
   CatalogCommand,
   CatalogMcp,
+  CatalogPlugin,
   CatalogSkill,
 } from "../catalog/discover.js";
 import { parseEntryId, type Lockfile } from "../lockfile/schema.js";
@@ -10,6 +11,7 @@ export interface SelectedArtifacts {
   skills: CatalogSkill[];
   commands: CatalogCommand[];
   mcp: CatalogMcp[];
+  plugins: CatalogPlugin[];
 }
 
 // Resolve the lockfile's selected entry ids against the catalog. Entries whose
@@ -21,6 +23,7 @@ export const resolveSelection = (
   const skillNames = new Set<string>();
   const commandNames = new Set<string>();
   const mcpNames = new Set<string>();
+  const pluginNames = new Set<string>();
 
   for (const id of Object.keys(lock.entries)) {
     const parsed = parseEntryId(id);
@@ -28,11 +31,13 @@ export const resolveSelection = (
     if (parsed.type === "skill") skillNames.add(parsed.name);
     else if (parsed.type === "command") commandNames.add(parsed.name);
     else if (parsed.type === "mcp") mcpNames.add(parsed.name);
+    else if (parsed.type === "plugin") pluginNames.add(parsed.name);
   }
 
   return {
     skills: catalog.skills.filter((s) => skillNames.has(s.name)),
     commands: catalog.commands.filter((c) => commandNames.has(c.name)),
     mcp: catalog.mcp.filter((m) => mcpNames.has(m.name)),
+    plugins: catalog.plugins.filter((p) => pluginNames.has(p.name)),
   };
 };

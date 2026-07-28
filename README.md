@@ -1,8 +1,8 @@
 # quiver-cli
 
-Compose a selected subset of skills, slash commands and MCP servers from a
-central catalog into any repo — as **native configs** for opencode, Claude Code
-and Codex — with **lockfile-based drift awareness**.
+Compose a selected subset of skills, slash commands, provider plugins and MCP
+servers from a central catalog into any repo — as **native configs** for
+opencode, Claude Code and Codex — with **lockfile-based drift awareness**.
 
 One thing done right: repo composition + drift detection. No marketplace, no
 extra agents, no command abstraction.
@@ -35,7 +35,7 @@ Restart your AI tool (Claude Code, opencode, Codex) to load the configs.
 Day to day:
 
 ```bash
-quiver-cli add mcp:context7   # add one entry (skill:/command:/mcp:)
+quiver-cli add mcp:context7   # add one entry (skill:/command:/mcp:/plugin:)
 quiver-cli sync               # regenerate provider configs from .agents/
 quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 ```
@@ -45,7 +45,7 @@ quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 | Command                    | Description                                                       |
 | -------------------------- | ----------------------------------------------------------------- |
 | `quiver-cli init`          | Interactive picker; write native configs + `quiver.lock`          |
-| `quiver-cli add <id>`      | Add one entry (`skill:<name>`, `command:<name>`, `mcp:<name>`)    |
+| `quiver-cli add <id>`      | Add one entry (`skill:`, `command:`, `mcp:`, `plugin:`)           |
 | `quiver-cli remove <id>`   | Remove one entry; keep lockfile + configs consistent              |
 | `quiver-cli update [id]`   | Pull newer catalog content into `.agents/` (all or one entry)     |
 | `quiver-cli sync`          | Regenerate provider configs from `.agents/`; warn on drift        |
@@ -69,6 +69,7 @@ configs), `--catalog=<source>` (catalog source for `init` and `upstream`),
 | Skills   | `.claude/skills/*` (link)| `.opencode/skills/*` (link) | native from `.agents/skills`   |
 | Commands | `.claude/commands/*`     | `.opencode/commands/*`      | (not supported yet)            |
 | MCP      | `.mcp.json`              | `opencode.json`             | `.codex/config.toml`           |
+| Plugins  | —                        | `.opencode/plugins/*`       | —                              |
 | Guide    | `CLAUDE.md` (link)       | `AGENTS.md` (link)          | `AGENTS.md` (native)           |
 
 `AGENTS.md` at the repo root is a symlink to `.agents/AGENTS.md` (created only
@@ -79,6 +80,23 @@ By default configs are generated for all three tools. `init` asks which ones
 you use (or pass `--providers=claude,opencode`); the choice is stored in
 `quiver.lock`, and deselected tools have their generated files cleaned up on
 `sync`.
+
+OpenCode-specific settings can be committed under `opencode` and `tui` in
+`.agents/config.json`. Quiver merges the `opencode` overlay with selected MCP
+servers and emits `.opencode/tui.json` from the `tui` overlay. Selected local
+plugins are copied under `.agents/plugins/opencode/` and linked into OpenCode's
+plugin discovery directory.
+
+MCP `${VAR}` placeholders are emitted as OpenCode-native `{env:VAR}` references,
+so generated `opencode.json` files never contain resolved secret values.
+
+The bundled catalog includes the official RTK OpenCode adapter. Install RTK
+separately, then enable the adapter per repository:
+
+```bash
+quiver-cli add plugin:rtk
+quiver-cli check             # also verifies that the rtk binary is on PATH
+```
 
 ## The lockfile
 

@@ -3,6 +3,7 @@ import { loadCatalog } from "../catalog/discover.js";
 import {
   commandToEntry,
   mcpToEntry,
+  pluginToEntry,
   skillToEntry,
 } from "../catalog/entries.js";
 import { materializeCatalog } from "../catalog/materialize.js";
@@ -35,12 +36,13 @@ export const init = async (options: CliOptions): Promise<void> => {
   }
   const sourceCatalog = loadCatalog(source);
 
-  const selection = await selectFromCatalog(sourceCatalog, {
-    interactive: !options.all,
-  });
-
   const providers = await resolveProviders(options);
   if (providers === null) return; // invalid flag value, already reported
+
+  const selection = await selectFromCatalog(sourceCatalog, {
+    interactive: !options.all,
+    providers,
+  });
 
   // Materialize selected artifacts into the repo's .agents/, then re-discover
   // from there so digests and provider symlinks are repo-local.
@@ -72,10 +74,15 @@ export const init = async (options: CliOptions): Promise<void> => {
       lock.entries[entryId("mcp", mcp.name)] = mcpToEntry(mcp);
     }
   }
+  for (const plugin of catalog.plugins) {
+    if (selection.plugins.includes(plugin.name)) {
+      lock.entries[entryId("plugin", plugin.name)] = pluginToEntry(plugin);
+    }
+  }
 
   writeLockfile(options.targetRoot, lock);
   await ui.step(
-    `Wrote quiver.lock (${selection.skills.length} skills, ${selection.commands.length} commands, ${selection.mcp.length} MCP servers)`,
+    `Wrote quiver.lock (${selection.skills.length} skills, ${selection.commands.length} commands, ${selection.mcp.length} MCP servers, ${selection.plugins.length} plugins)`,
   );
 
   const result = writeProviders(options.targetRoot, catalog, lock);

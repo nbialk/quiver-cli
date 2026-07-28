@@ -1,4 +1,5 @@
 import type { Catalog } from "../catalog/discover.js";
+import type { Provider } from "../lockfile/schema.js";
 import * as ui from "../ui/prompts.js";
 
 const DEFAULT_SKILLS = ["find-skills", "skill-creator"];
@@ -8,6 +9,7 @@ export interface Selection {
   skills: string[];
   commands: string[];
   mcp: string[];
+  plugins: string[];
 }
 
 // One-line hint for a skill: "v1.2.3 · short description". Either part may be
@@ -38,14 +40,26 @@ const serverDetail = (catalog: Catalog, name: string): string => {
 // Interactive (or all-on) selection across the three artifact kinds.
 export const selectFromCatalog = async (
   catalog: Catalog,
-  { interactive }: { interactive: boolean },
+  {
+    interactive,
+    providers,
+  }: { interactive: boolean; providers: Provider[] },
 ): Promise<Selection> => {
   const allSkills = catalog.skills.map((s) => s.name);
   const allCommands = catalog.commands.map((c) => c.name);
   const allMcp = catalog.mcp.map((m) => m.name);
+  const availablePlugins = catalog.plugins.filter((plugin) =>
+    providers.includes(plugin.provider),
+  );
+  const allPlugins = availablePlugins.map((p) => p.name);
 
   if (!interactive || !process.stdin.isTTY) {
-    return { skills: allSkills, commands: allCommands, mcp: allMcp };
+    return {
+      skills: allSkills,
+      commands: allCommands,
+      mcp: allMcp,
+      plugins: allPlugins,
+    };
   }
 
   // Skills, grouped (general first, defaults surfaced).
@@ -118,5 +132,24 @@ export const selectFromCatalog = async (
       })
     : [];
 
-  return { skills, commands, mcp };
+  const plugins = availablePlugins.length
+    ? await ui.selectGrouped({
+        message: "Select plugins (space toggles, a all, enter confirms)",
+        groups: [
+          {
+            name: "opencode",
+            items: availablePlugins.map((plugin) => ({
+              value: plugin.name,
+              label: plugin.name,
+              hint: plugin.requires.length
+                ? `requires: ${plugin.requires.join(", ")}`
+                : undefined,
+            })),
+          },
+        ],
+        initialValues: [],
+      })
+    : [];
+
+  return { skills, commands, mcp, plugins };
 };

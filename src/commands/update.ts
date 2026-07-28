@@ -11,6 +11,7 @@ import {
   type CommandEntry,
   type Lockfile,
   type McpEntry,
+  type PluginEntry,
   type SkillEntry,
 } from "../lockfile/schema.js";
 import { writeProviders } from "../providers/write.js";
@@ -101,7 +102,7 @@ export const update = async (options: CliOptions): Promise<void> => {
 const applyUpdate = (
   targetRoot: string,
   parsed: { type: string; name: string },
-  entry: SkillEntry | CommandEntry | McpEntry,
+  entry: SkillEntry | CommandEntry | McpEntry | PluginEntry,
   sourceCatalog: Catalog,
   repoCatalog: Catalog,
   lock: Lockfile,
@@ -140,6 +141,32 @@ const applyUpdate = (
     cpSync(src.absPath, dest, { force: true });
     entry.digest = src.digest;
     entry.sourcePath = src.sourcePath;
+    return { id, status: "updated" };
+  }
+
+  if (entry.type === "plugin") {
+    const src = sourceCatalog.plugins.find((p) => p.name === parsed.name);
+    if (!src) return { id, status: "not-in-catalog" };
+    if (src.digest === entry.digest) return { id, status: "up-to-date" };
+    const repo = repoCatalog.plugins.find((p) => p.name === parsed.name);
+    if (repo && repo.digest !== entry.digest && !force) {
+      return { id, status: "local-changes" };
+    }
+    const dest = resolve(targetRoot, ".agents", src.sourcePath);
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(src.absPath, dest, { force: true });
+    const configPath = resolve(targetRoot, ".agents/config.json");
+    const config = JSON.parse(readFileSync(configPath, "utf8")) as {
+      plugins?: Record<string, unknown>;
+    };
+    config.plugins = {
+      ...config.plugins,
+      [parsed.name]: sourceCatalog.config.plugins?.[parsed.name],
+    };
+    writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+    entry.digest = src.digest;
+    entry.sourcePath = src.sourcePath;
+    entry.requires = src.requires;
     return { id, status: "updated" };
   }
 

@@ -33,8 +33,9 @@ pnpm vitest run test/check.test.ts
 
 ## The catalog
 
-The catalog of installable skills, commands and MCP servers lives under
-`template/.agents/`. Edit it to change what `quiver-cli init`/`add` can install.
+The catalog of installable skills, commands, provider plugins and MCP servers
+lives under `template/.agents/`. Edit it to change what `quiver-cli init`/`add`
+can install.
 
 ## Commit messages
 

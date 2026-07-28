@@ -12,6 +12,7 @@ export const refreshLockDigests = (
   const skillByName = new Map(catalog.skills.map((s) => [s.name, s]));
   const commandByName = new Map(catalog.commands.map((c) => [c.name, c]));
   const mcpByName = new Map(catalog.mcp.map((m) => [m.name, m]));
+  const pluginByName = new Map(catalog.plugins.map((p) => [p.name, p]));
 
   for (const [id, entry] of Object.entries(lock.entries)) {
     if (entry.type === "skill") {
@@ -36,6 +37,15 @@ export const refreshLockDigests = (
         drift.push(`${id}: MCP server definition changed`);
         entry.configDigest = cat.configDigest;
         entry.transport = cat.server.transport;
+      }
+    } else if (entry.type === "plugin") {
+      const cat = pluginByName.get(id.slice("plugin:".length));
+      if (!cat) continue;
+      if (cat.digest !== entry.digest) {
+        drift.push(`${id}: plugin content changed`);
+        entry.digest = cat.digest;
+        entry.sourcePath = cat.sourcePath;
+        entry.requires = cat.requires;
       }
     }
   }

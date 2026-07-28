@@ -4,12 +4,13 @@ Guide for coding agents working in this repository.
 
 ## Agent Setup
 
-Agent configuration (skills, commands, MCP servers) lives in `.agents/` — the
+Agent configuration (skills, commands, plugins, MCP servers) lives in `.agents/` — the
 single source of truth, managed by [quiver-cli](https://github.com/nbialk/quiver-cli):
 
 - `.agents/skills/` — agent skills (SKILL.md directories).
 - `.agents/commands/` — slash commands.
-- `.agents/config.json` — MCP servers and shared settings.
+- `.agents/plugins/` — provider-specific local plugins.
+- `.agents/config.json` — MCP servers, plugins and provider overlays.
 - `quiver.lock` — locked state with content digests.
 
 Provider files (`.claude/`, `.opencode/`, `.codex/`, `.mcp.json`,
