@@ -1,11 +1,13 @@
 import type {
   CommandEntry,
   McpEntry,
+  PluginEntry,
   SkillEntry,
 } from "../lockfile/schema.js";
 import type {
   CatalogCommand,
   CatalogMcp,
+  CatalogPlugin,
   CatalogSkill,
 } from "./discover.js";
 
@@ -30,4 +32,12 @@ export const mcpToEntry = (mcp: CatalogMcp): McpEntry => ({
   configDigest: mcp.configDigest,
   tools: null,
   toolsFetchedAt: null,
+});
+
+export const pluginToEntry = (plugin: CatalogPlugin): PluginEntry => ({
+  type: "plugin",
+  provider: plugin.provider,
+  sourcePath: plugin.sourcePath,
+  digest: plugin.digest,
+  requires: plugin.requires,
 });

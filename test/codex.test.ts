@@ -9,10 +9,12 @@ const baseInputs = (
 ): ProviderInputs => ({
   targetRoot: "/tmp/x",
   agentsRoot: "/tmp/x/.agents",
-  selected: { skills: [], commands: [], mcp: [] },
+  selected: { skills: [], commands: [], mcp: [], plugins: [] },
   mcpServers: {},
   rawMcpServers,
   claudeSettings: null,
+  opencodeConfig: null,
+  tuiConfig: null,
 });
 
 describe("planCodex", () => {

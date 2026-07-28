@@ -8,11 +8,13 @@ export interface ProviderInputs {
   targetRoot: string;
   agentsRoot: string;
   selected: SelectedArtifacts;
-  /** Already env-interpolated MCP servers, keyed by name (Claude/opencode). */
+  /** Already env-interpolated MCP servers, keyed by name (Claude). */
   mcpServers: Record<string, McpServer>;
   /** Raw MCP servers with ${VAR} placeholders intact (Codex env mapping). */
   rawMcpServers: Record<string, McpServer>;
   claudeSettings: unknown;
+  opencodeConfig: Record<string, unknown> | null;
+  tuiConfig: Record<string, unknown> | null;
 }
 
 export interface ProviderPlan {

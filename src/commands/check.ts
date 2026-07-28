@@ -1,3 +1,6 @@
+import { accessSync, constants } from "node:fs";
+import { delimiter, resolve } from "node:path";
+
 import type { CliOptions } from "../cli.js";
 import { loadRepoCatalog, repoCatalogExists } from "../catalog/repo.js";
 import { readLockfile, writeLockfile } from "../lockfile/io.js";
@@ -12,6 +15,11 @@ import * as ui from "../ui/prompts.js";
 interface SkillDriftItem {
   id: string;
   kind: "content";
+}
+
+interface PluginRequirementIssue {
+  id: string;
+  command: string;
 }
 
 interface McpReport {
@@ -36,8 +44,10 @@ export const check = async (options: CliOptions): Promise<void> => {
   // --- Skill / command content drift (local digests) -----------------------
   const skillByName = new Map(catalog.skills.map((s) => [s.name, s]));
   const commandByName = new Map(catalog.commands.map((c) => [c.name, c]));
+  const pluginByName = new Map(catalog.plugins.map((p) => [p.name, p]));
   const skillDrift: SkillDriftItem[] = [];
-  const checked = { skills: 0, commands: 0, mcp: 0 };
+  const pluginRequirements: PluginRequirementIssue[] = [];
+  const checked = { skills: 0, commands: 0, mcp: 0, plugins: 0 };
 
   for (const [id, entry] of Object.entries(lock.entries)) {
     const p = parseEntryId(id);
@@ -52,6 +62,17 @@ export const check = async (options: CliOptions): Promise<void> => {
       if (!cat) continue;
       checked.commands += 1;
       if (cat.digest !== entry.digest) skillDrift.push({ id, kind: "content" });
+    } else if (entry.type === "plugin") {
+      const cat = pluginByName.get(p.name);
+      if (!cat) continue;
+      checked.plugins += 1;
+      if (cat.digest !== entry.digest) skillDrift.push({ id, kind: "content" });
+      if (lock.providers?.length && !lock.providers.includes(entry.provider)) {
+        continue;
+      }
+      for (const command of entry.requires) {
+        if (!hasCommand(command)) pluginRequirements.push({ id, command });
+      }
     }
   }
 
@@ -109,13 +130,21 @@ export const check = async (options: CliOptions): Promise<void> => {
 
   const hasDrift =
     skillDrift.length > 0 ||
+    pluginRequirements.length > 0 ||
     shimProblems.length > 0 ||
     mcpReports.some((r) => r.status === "drift");
 
   if (options.json) {
     console.log(
       JSON.stringify(
-        { ok: !hasDrift, checked, skillDrift, shims: shimProblems, mcp: mcpReports },
+        {
+          ok: !hasDrift,
+          checked,
+          skillDrift,
+          pluginRequirements,
+          shims: shimProblems,
+          mcp: mcpReports,
+        },
         null,
         2,
       ),
@@ -124,7 +153,14 @@ export const check = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  await report(skillDrift, shimProblems, mcpReports, checked, options);
+  await report(
+    skillDrift,
+    pluginRequirements,
+    shimProblems,
+    mcpReports,
+    checked,
+    options,
+  );
   if (hasDrift) process.exitCode = 1;
 };
 
@@ -132,10 +168,12 @@ export interface CheckedCounts {
   skills: number;
   commands: number;
   mcp: number;
+  plugins: number;
 }
 
 const report = async (
   skillDrift: SkillDriftItem[],
+  pluginRequirements: PluginRequirementIssue[],
   shimProblems: string[],
   mcpReports: McpReport[],
   checked: CheckedCounts,
@@ -143,8 +181,16 @@ const report = async (
 ): Promise<void> => {
   if (skillDrift.length) {
     await ui.warn(
-      `Skill/command content changed since lockfile:\n  - ${skillDrift
+      `Managed content changed since lockfile:\n  - ${skillDrift
         .map((s) => s.id)
+        .join("\n  - ")}`,
+    );
+  }
+
+  if (pluginRequirements.length) {
+    await ui.warn(
+      `Plugin requirements missing:\n  - ${pluginRequirements
+        .map((issue) => `${issue.id}: ${issue.command}`)
         .join("\n  - ")}`,
     );
   }
@@ -190,7 +236,8 @@ const report = async (
   const summary = summarize(checked);
   const hasDrift =
     skillDrift.length > 0 || shimProblems.length > 0 || drifted.length > 0;
-  if (!hasDrift) {
+  const hasProblems = hasDrift || pluginRequirements.length > 0;
+  if (!hasProblems) {
     await ui.success(`check passed: ${summary}, no drift detected.`);
   } else {
     await ui.info(`checked ${summary}, drift detected.`);
@@ -270,7 +317,26 @@ export const summarize = (c: CheckedCounts): string => {
   if (c.skills) parts.push(plural(c.skills, "skill"));
   if (c.commands) parts.push(plural(c.commands, "command"));
   if (c.mcp) parts.push(plural(c.mcp, "MCP server"));
+  if (c.plugins) parts.push(plural(c.plugins, "plugin"));
   return parts.length ? parts.join(", ") : "nothing";
+};
+
+export const hasCommand = (command: string): boolean => {
+  if (!/^[A-Za-z0-9._-]+$/.test(command)) return false;
+  const extensions = process.platform === "win32"
+    ? (process.env["PATHEXT"] ?? ".EXE;.CMD;.BAT;.COM").split(";")
+    : [""];
+  for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
+    for (const extension of extensions) {
+      try {
+        accessSync(resolve(dir, command + extension), constants.X_OK);
+        return true;
+      } catch {
+        // Try the next PATH entry.
+      }
+    }
+  }
+  return false;
 };
 
 const truncate = (s: string, max = 120): string =>

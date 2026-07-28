@@ -2,6 +2,13 @@
   "shared": {
     "devCommand": "pnpm run dev"
   },
+  "plugins": {
+    "rtk": {
+      "provider": "opencode",
+      "sourcePath": "plugins/opencode/rtk.ts",
+      "requires": ["rtk"]
+    }
+  },
   "mcpServers": {
     "context7": {
       "transport": "http",

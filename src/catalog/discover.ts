@@ -23,7 +23,16 @@ export type McpServer = HttpServer | StdioServer;
 export interface CatalogConfig {
   shared?: Record<string, unknown>;
   mcpServers?: Record<string, McpServer>;
+  plugins?: Record<string, PluginConfig>;
+  opencode?: Record<string, unknown>;
+  tui?: Record<string, unknown>;
   claude?: { settings?: unknown };
+}
+
+export interface PluginConfig {
+  provider: "opencode";
+  sourcePath: string;
+  requires?: string[];
 }
 
 export interface CatalogSkill {
@@ -53,12 +62,22 @@ export interface CatalogMcp {
   configDigest: string;
 }
 
+export interface CatalogPlugin {
+  name: string;
+  provider: "opencode";
+  sourcePath: string;
+  absPath: string;
+  digest: string;
+  requires: string[];
+}
+
 export interface Catalog {
   config: CatalogConfig;
   configPath: string;
   skills: CatalogSkill[];
   commands: CatalogCommand[];
   mcp: CatalogMcp[];
+  plugins: CatalogPlugin[];
 }
 
 const readConfig = (root: string): { config: CatalogConfig; path: string } => {
@@ -144,6 +163,24 @@ const discoverMcp = (config: CatalogConfig): CatalogMcp[] => {
     }));
 };
 
+const discoverPlugins = (root: string, config: CatalogConfig): CatalogPlugin[] =>
+  Object.entries(config.plugins ?? {})
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, plugin]) => {
+      const absPath = resolve(root, plugin.sourcePath);
+      if (!existsSync(absPath)) {
+        throw new Error(`Plugin "${name}" source not found: ${absPath}`);
+      }
+      return {
+        name,
+        provider: plugin.provider,
+        sourcePath: plugin.sourcePath,
+        absPath,
+        digest: jsonDigest({ config: plugin, content: fileDigest(absPath) }),
+        requires: plugin.requires ?? [],
+      };
+    });
+
 export const loadCatalog = (catalog: ResolvedCatalog): Catalog => {
   const { config, path } = readConfig(catalog.root);
   return {
@@ -152,5 +189,6 @@ export const loadCatalog = (catalog: ResolvedCatalog): Catalog => {
     skills: discoverSkills(catalog.root),
     commands: discoverCommands(catalog.root),
     mcp: discoverMcp(config),
+    plugins: discoverPlugins(catalog.root, config),
   };
 };

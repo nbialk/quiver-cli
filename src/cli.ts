@@ -18,19 +18,19 @@ export interface CliOptions {
   positionals: string[];
 }
 
-const HELP = `quiver-cli - compose agent skills, commands & MCP servers into any repo
+const HELP = `quiver-cli - compose agent skills, commands, plugins & MCP servers into any repo
 
 Usage:
   quiver-cli <command> [options]
 
 Commands:
   init             Interactive picker over the catalog; write native configs + quiver.lock
-  add <id>         Add a single catalog entry (skill:<name>, command:<name>, mcp:<name>)
+  add <id>         Add an entry (skill:<name>, command:<name>, mcp:<name>, plugin:<name>)
   remove <id>      Remove a single entry; keep lockfile + configs consistent
   sync             Regenerate provider configs from .agents/ (warns on drift)
   providers [a,b]  Change which tools get configs (claude, opencode, codex)
   update [id]      Pull newer catalog content into .agents/ (all or one entry)
-  list             Show installed entries (skills, commands, MCP tool counts)
+  list             Show installed entries (skills, commands, plugins, MCP tool counts)
   check            Detect drift: skill digests, provider shims, MCP tool
                    snapshots (--offline skips MCP re-introspection)
   upstream         Catalog maintenance: check source repos for skill updates

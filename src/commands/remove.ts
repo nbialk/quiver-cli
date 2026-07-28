@@ -12,7 +12,9 @@ import * as ui from "../ui/prompts.js";
 export const remove = async (options: CliOptions): Promise<void> => {
   const id = options.positionals[0];
   if (!id) {
-    await ui.error("Usage: quiver remove <skill:name|command:name|mcp:name>");
+    await ui.error(
+      "Usage: quiver remove <skill:name|command:name|mcp:name|plugin:name>",
+    );
     process.exitCode = 1;
     return;
   }
@@ -37,7 +39,11 @@ export const remove = async (options: CliOptions): Promise<void> => {
 
   // Remove the materialized artifact (skills/commands). MCP entries only live
   // in config.json, which is rewritten by writeProviders below.
-  if (entry.type === "skill" || entry.type === "command") {
+  if (
+    entry.type === "skill" ||
+    entry.type === "command" ||
+    entry.type === "plugin"
+  ) {
     removeArtifact(options.targetRoot, entry.sourcePath);
     cleanupEmptyGroups(options.targetRoot);
   }
@@ -48,10 +54,34 @@ export const remove = async (options: CliOptions): Promise<void> => {
   // For MCP removal we must also rewrite the materialized config.json so the
   // repo catalog no longer advertises the server.
   rewriteRepoMcp(options.targetRoot, lock);
+  rewriteRepoPlugins(options.targetRoot, lock);
 
   const { catalog } = loadRepoCatalog(options.targetRoot, lock.catalog.source);
   writeProviders(options.targetRoot, catalog, lock);
   await ui.success(`Removed ${id}.`);
+};
+
+const rewriteRepoPlugins = (
+  targetRoot: string,
+  lock: NonNullable<ReturnType<typeof readLockfile>>,
+): void => {
+  const configPath = resolve(targetRoot, ".agents/config.json");
+  if (!existsSync(configPath)) return;
+  const config = JSON.parse(readFileSync(configPath, "utf8")) as {
+    plugins?: Record<string, unknown>;
+  };
+  if (!config.plugins) return;
+  const keep = new Set(
+    Object.keys(lock.entries)
+      .map(parseEntryId)
+      .filter((p): p is { type: "plugin"; name: string } => p?.type === "plugin")
+      .map((p) => p.name),
+  );
+  config.plugins = Object.fromEntries(
+    Object.entries(config.plugins).filter(([name]) => keep.has(name)),
+  );
+  if (!Object.keys(config.plugins).length) delete config.plugins;
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
 };
 
 // Drop now-empty group folders under .agents/skills.

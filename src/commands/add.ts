@@ -3,6 +3,7 @@ import { loadCatalog } from "../catalog/discover.js";
 import {
   commandToEntry,
   mcpToEntry,
+  pluginToEntry,
   skillToEntry,
 } from "../catalog/entries.js";
 import { materializeCatalog } from "../catalog/materialize.js";
@@ -17,13 +18,17 @@ import * as ui from "../ui/prompts.js";
 export const add = async (options: CliOptions): Promise<void> => {
   const id = options.positionals[0];
   if (!id) {
-    await ui.error("Usage: quiver-cli add <skill:name|command:name|mcp:name>");
+    await ui.error(
+      "Usage: quiver-cli add <skill:name|command:name|mcp:name|plugin:name>",
+    );
     process.exitCode = 1;
     return;
   }
   const parsed = parseEntryId(id);
   if (!parsed) {
-    await ui.error(`Invalid id "${id}". Expected skill:<name>, command:<name> or mcp:<name>.`);
+    await ui.error(
+      `Invalid id "${id}". Expected skill:<name>, command:<name>, mcp:<name> or plugin:<name>.`,
+    );
     process.exitCode = 1;
     return;
   }
@@ -50,6 +55,7 @@ export const add = async (options: CliOptions): Promise<void> => {
   const skill = sourceCatalog.skills.find((s) => s.name === parsed.name);
   const command = sourceCatalog.commands.find((c) => c.name === parsed.name);
   const mcp = sourceCatalog.mcp.find((m) => m.name === parsed.name);
+  const plugin = sourceCatalog.plugins.find((p) => p.name === parsed.name);
 
   const entry =
     parsed.type === "skill" && skill
@@ -58,10 +64,24 @@ export const add = async (options: CliOptions): Promise<void> => {
         ? commandToEntry(command)
         : parsed.type === "mcp" && mcp
           ? mcpToEntry(mcp)
+          : parsed.type === "plugin" && plugin
+            ? pluginToEntry(plugin)
           : null;
 
   if (!entry) {
     await ui.error(`${id} not found in catalog.`);
+    process.exitCode = 1;
+    return;
+  }
+  if (
+    entry.type === "plugin" &&
+    lock.providers?.length &&
+    !lock.providers.includes(entry.provider)
+  ) {
+    await ui.error(
+      `${id} requires the ${entry.provider} provider. Enable it with ` +
+        `\`quiver-cli providers ${entry.provider}\` first.`,
+    );
     process.exitCode = 1;
     return;
   }
@@ -72,6 +92,7 @@ export const add = async (options: CliOptions): Promise<void> => {
   if (parsed.type === "skill") selection.skills.push(parsed.name);
   if (parsed.type === "command") selection.commands.push(parsed.name);
   if (parsed.type === "mcp") selection.mcp.push(parsed.name);
+  if (parsed.type === "plugin") selection.plugins.push(parsed.name);
 
   materializeCatalog(options.targetRoot, source, sourceCatalog, selection);
 
@@ -84,13 +105,19 @@ export const add = async (options: CliOptions): Promise<void> => {
 };
 
 const selectionFromLock = (lock: NonNullable<ReturnType<typeof readLockfile>>): Selection => {
-  const selection: Selection = { skills: [], commands: [], mcp: [] };
+  const selection: Selection = {
+    skills: [],
+    commands: [],
+    mcp: [],
+    plugins: [],
+  };
   for (const lid of Object.keys(lock.entries)) {
     const p = parseEntryId(lid);
     if (!p) continue;
     if (p.type === "skill") selection.skills.push(p.name);
     else if (p.type === "command") selection.commands.push(p.name);
     else if (p.type === "mcp") selection.mcp.push(p.name);
+    else if (p.type === "plugin") selection.plugins.push(p.name);
   }
   return selection;
 };
