@@ -36,10 +36,11 @@ const formatOpenCodeJson = (
     overlay?.["mcp"] && typeof overlay["mcp"] === "object"
       ? (overlay["mcp"] as Record<string, unknown>)
       : {};
+  const mergedMcp = { ...overlayMcp, ...mcp };
   const config = {
     ...overlay,
     $schema: "https://opencode.ai/config.json",
-    ...(Object.keys(mcp).length ? { mcp: { ...overlayMcp, ...mcp } } : {}),
+    ...(Object.keys(mergedMcp).length ? { mcp: mergedMcp } : {}),
   };
   return JSON.stringify(config, null, 2) + "\n";
 };
