@@ -46,7 +46,7 @@ const formatOpenCodeJson = (
 };
 
 const preserveEnvReference = (value: string): string =>
-  value.replace(/\$\{([A-Z_][A-Z0-9_]*)\}/g, "{env:$1}");
+  value.replace(/\$\{([^}]+)\}/g, "{env:$1}");
 
 const preserveEnvReferences = (
   values: Record<string, string>,
