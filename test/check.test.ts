@@ -29,8 +29,31 @@ describe("summarize", () => {
 });
 
 describe("hasCommand", () => {
-  it("finds commands on PATH and rejects invalid names", () => {
-    expect(hasCommand("node")).toBe(true);
-    expect(hasCommand("../node")).toBe(false);
+  it("finds commands on PATH and rejects invalid names", async () => {
+    const originalPath = process.env.PATH;
+    const { mkdtempSync, writeFileSync, chmodSync, rmSync } = await import(
+      "node:fs",
+    );
+    const { tmpdir } = await import("node:os");
+    const { join, delimiter } = await import("node:path");
+
+    const dir = mkdtempSync(join(tmpdir(), "quiver-path-"));
+    const cmd = "quiver-test-cmd";
+    try {
+      if (process.platform === "win32") {
+        writeFileSync(join(dir, `${cmd}.cmd`), "@echo off\r\n");
+      } else {
+        const p = join(dir, cmd);
+        writeFileSync(p, "#!/bin/sh\nexit 0\n");
+        chmodSync(p, 0o755);
+      }
+      process.env.PATH = `${dir}${delimiter}${originalPath ?? ""}`;
+
+      expect(hasCommand(cmd)).toBe(true);
+      expect(hasCommand("../node")).toBe(false);
+    } finally {
+      process.env.PATH = originalPath;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
