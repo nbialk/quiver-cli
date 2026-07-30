@@ -1,5 +1,30 @@
 # Changelog
 
+## [1.0.0](https://github.com/nbialk/quiver-cli/compare/v0.8.0...v1.0.0) (2026-07-30)
+
+
+### ⚠ BREAKING CHANGES
+
+* **auth:** drop login/logout in favor of env tokens and the gh CLI
+
+### Features
+
+* **auth:** drop login/logout in favor of env tokens and the gh CLI ([8bf5909](https://github.com/nbialk/quiver-cli/commit/8bf5909fac5891d437fd3e3b41c00122dc5705f9))
+* **check:** fold status into check and add --offline mode ([c6ba7a1](https://github.com/nbialk/quiver-cli/commit/c6ba7a1fe44d740bab85bf8b444ae02f78171fcc))
+* **opencode:** add managed plugin support ([#11](https://github.com/nbialk/quiver-cli/issues/11)) ([d85ec98](https://github.com/nbialk/quiver-cli/commit/d85ec9856ca28801913ee877321a5f528f9dc8b6))
+* **update:** add --dry-run flag ([c334507](https://github.com/nbialk/quiver-cli/commit/c334507e8b5ca46d98e652a7cbee45eff992a14f))
+
+
+### Code Refactoring
+
+* **cli:** reject unknown flags and export a testable entry point ([7d35ee9](https://github.com/nbialk/quiver-cli/commit/7d35ee98a87c907d914d3794fb580004322b7e8f))
+* **upstream:** collapse plain drift into one pull hint ([f2ea700](https://github.com/nbialk/quiver-cli/commit/f2ea700403d471e2b203d8ae34d48e4e6dcbede1))
+
+
+### Documentation
+
+* document providers, check --accept and =-style flags ([24391f4](https://github.com/nbialk/quiver-cli/commit/24391f4c4c1e01774c4d7351a83efeacae494843))
+
 ## [0.8.0](https://github.com/nbialk/quiver-cli/compare/v0.7.0...v0.8.0) (2026-06-24)
 
 
