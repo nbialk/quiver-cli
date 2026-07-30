@@ -8,13 +8,16 @@ One thing done right: repo composition + drift detection. No marketplace, no
 extra agents, no command abstraction.
 
 - **One source of truth** — `.agents/` + `quiver.lock`, committed to the repo.
-- **Native output** — `.claude/`, `.opencode/`, `.codex/`, `.mcp.json`,
-  `opencode.json` are generated and gitignored; each tool loads its own format.
+- **Native output** — `.opencode/`, `opencode.json`, `.claude/`, `.mcp.json`,
+  `.codex/` are generated and gitignored; each tool loads its own format.
 - **Drift detection** — content digests for skills/commands, tool snapshots for
   MCP servers (including tool-description poisoning).
 - **Upstream awareness** — know when a source repo updates a skill you imported.
 
 ## Quick start
+
+Requires **Node >= 20.12** (the interactive pickers depend on it; `init`, `add`,
+`remove` and `providers` abort on older versions).
 
 From the root of the target repository:
 
@@ -31,7 +34,7 @@ git add .agents quiver.lock .gitignore
 git commit -m "chore: add agent config"
 ```
 
-Restart your AI tool (Claude Code, opencode, Codex) to load the configs.
+Restart your AI tool (opencode, Claude Code, Codex) to load the configs.
 Day to day:
 
 ```bash
@@ -46,10 +49,11 @@ quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 | -------------------------- | ----------------------------------------------------------------- |
 | `quiver-cli init`          | Interactive picker; write native configs + `quiver.lock`          |
 | `quiver-cli add <id>`      | Add one entry (`skill:`, `command:`, `mcp:`, `plugin:`)           |
-| `quiver-cli remove <id>`   | Remove one entry; keep lockfile + configs consistent              |
+| `quiver-cli remove <id>`   | Remove one entry; keep lockfile + configs consistent (alias: `rm`)|
 | `quiver-cli update [id]`   | Pull newer catalog content into `.agents/` (all or one entry)     |
 | `quiver-cli sync`          | Regenerate provider configs from `.agents/`; warn on drift        |
-| `quiver-cli list`          | Show installed entries incl. MCP tool counts (alias: `ls`)        |
+| `quiver-cli providers`     | Change which tools get configs (`opencode`, `claude`, `codex`)    |
+| `quiver-cli list`          | Show skills, commands, plugins + MCP tool counts (alias: `ls`)    |
 | `quiver-cli check`         | Detect drift: skill digests, provider shims, MCP tool snapshots   |
 | `quiver-cli upstream`      | Check source repos for skill updates (catalog maintenance)        |
 | `quiver-cli upstream pull` | Pull latest upstream content into the catalog (`[skill]`)         |
@@ -57,35 +61,53 @@ quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 | `quiver-cli version`       | Show the version + any available update (`-v`, `--version`)       |
 
 Options: `-f/--force`, `--all/-y` (non-interactive), `--json`
-(check/upstream/list), `--providers=claude,opencode` (limit generated
-configs), `--catalog=<source>` (catalog source for `init` and `upstream`),
-`--offline` (skip MCP re-introspection during `check`), `--introspect-stdio`
-(allow running stdio MCP servers during `check`).
+(check/upstream/list/update), `--providers=opencode,claude` (set the generated
+configs for `init`, `sync` and `providers`), `--catalog=<source>` (catalog
+source for `init` and `upstream`), `--offline` (skip MCP re-introspection
+during `check`), `-V/--verbose` (full tool lists and description diffs in
+`check`), `--accept` (record the current MCP tool snapshots as the new
+baseline in `check`), `--introspect-stdio` (allow running stdio MCP servers
+during `check`).
+
+Value flags are written with `=` (`--providers=opencode,claude`,
+`--catalog=github:acme/catalog`); the space-separated form is not supported.
+`quiver-cli providers` also accepts the list as a positional
+(`quiver-cli providers opencode,claude`) and falls back to an interactive
+multiselect pre-filled with the current selection.
 
 ## What gets generated
 
-| Artifact | Claude Code              | opencode                    | Codex                          |
-| -------- | ------------------------ | --------------------------- | ------------------------------ |
-| Skills   | `.claude/skills/*` (link)| `.opencode/skills/*` (link) | native from `.agents/skills`   |
-| Commands | `.claude/commands/*`     | `.opencode/commands/*`      | (not supported yet)            |
-| MCP      | `.mcp.json`              | `opencode.json`             | `.codex/config.toml`           |
-| Plugins  | —                        | `.opencode/plugins/*`       | —                              |
-| Guide    | `CLAUDE.md` (link)       | `AGENTS.md` (link)          | `AGENTS.md` (native)           |
+| Artifact | opencode                    | Claude Code                 | Codex                        |
+| -------- | --------------------------- | --------------------------- | ---------------------------- |
+| Skills   | `.opencode/skills/*` (link) | `.claude/skills/*` (link)   | native from `.agents/skills` |
+| Commands | `.opencode/commands/*`      | `.claude/commands/*` (link) | (not supported yet)          |
+| MCP      | `opencode.json`             | `.mcp.json`                 | `.codex/config.toml`         |
+| Settings | `.opencode/tui.json`        | `.claude/settings.json`     | —                            |
+| Plugins  | `.opencode/plugins/*`       | —                           | —                            |
+| Guide    | `AGENTS.md` (link)          | `CLAUDE.md` (link)          | `AGENTS.md` (native)         |
 
 `AGENTS.md` at the repo root is a symlink to `.agents/AGENTS.md` (created only
-when the catalog ships one); `CLAUDE.md` links to it. Codex reads skills and
-`AGENTS.md` natively from the repo, so no shims are emitted for those.
+when the catalog ships one); `CLAUDE.md` links to it. Both are written
+independently of the provider selection. Codex reads skills and `AGENTS.md`
+natively from the repo, so no shims are emitted for those.
 
 By default configs are generated for all three tools. `init` asks which ones
-you use (or pass `--providers=claude,opencode`); the choice is stored in
+you use (or pass `--providers=opencode,claude`); the choice is stored in
 `quiver.lock`, and deselected tools have their generated files cleaned up on
 `sync`.
 
-OpenCode-specific settings can be committed under `opencode` and `tui` in
-`.agents/config.json`. Quiver merges the `opencode` overlay with selected MCP
-servers and emits `.opencode/tui.json` from the `tui` overlay. Selected local
-plugins are copied under `.agents/plugins/opencode/` and linked into OpenCode's
-plugin discovery directory.
+Besides `mcpServers` and `plugins`, `.agents/config.json` carries provider
+overlays that are copied into the generated configs:
+
+| Key        | Effect                                                            |
+| ---------- | ----------------------------------------------------------------- |
+| `opencode` | Merged with the selected MCP servers into `opencode.json`         |
+| `tui`      | Emitted as `.opencode/tui.json`                                   |
+| `claude`   | `claude.settings` is written verbatim to `.claude/settings.json`  |
+| `shared`   | Free-form values carried through into the repo's `config.json`    |
+
+Selected local plugins are copied under `.agents/plugins/opencode/` and linked
+into OpenCode's plugin discovery directory.
 
 MCP `${VAR}` placeholders are emitted as OpenCode-native `{env:VAR}` references,
 so generated `opencode.json` files never contain resolved secret values.
@@ -106,13 +128,15 @@ This is the basis for `sync` and `check`.
 
 ## `check` — drift awareness
 
-`check` is the single drift command. It compares three things:
+`check` is the single drift command. It compares four things:
 
 - **Skills/commands**: compares the stored digest against the current `.agents/`
   content.
-- **Provider shims**: verifies the generated `.claude/`, `.opencode/`, `.codex/`
+- **Provider shims**: verifies the generated `.opencode/`, `.claude/`, `.codex/`
   configs match the lockfile (missing, stale or out-of-sync files) → fix with
   `quiver-cli sync`.
+- **Plugin requirements**: warns when an installed plugin needs a binary that is
+  not on `PATH` (e.g. `rtk`).
 - **MCP servers** (the real lever): re-introspects `tools/list` and diffs against
   the snapshot → new/removed tools, changed input schemas, and — security
   critical — **changed tool descriptions** (defends against tool-description
@@ -127,6 +151,14 @@ Pass `--offline` to skip MCP re-introspection entirely and check only digests
 and provider shims — no network, no foreign code, useful for a fast local
 sanity check.
 
+Once a reported MCP change has been reviewed and is legitimate, record it as the
+new baseline:
+
+```bash
+quiver-cli check -V         # full tool lists and description before/after
+quiver-cli check --accept   # adopt the current snapshots
+```
+
 `quiver-cli check --json` is CI-friendly (exit 1 on drift).
 
 ## `upstream` — source updates
@@ -138,10 +170,10 @@ imported into the catalog?**
 
 Because it records baselines (and `pull` rewrites skill copies) **in the catalog
 itself**, run it where the catalog is writable — inside the quiver-cli repo, or
-against a writable local checkout via `--catalog <path>`. Run from a consuming
-repo, where the catalog is the read-only installed package (or a remote cache),
-it aborts with guidance; use `quiver-cli check` / `quiver-cli update` there
-instead.
+against a writable local checkout via `--catalog=local:/absolute/path/.agents`.
+Run from a consuming repo, where the catalog is the read-only installed package
+(or a remote cache), it aborts with guidance; use `quiver-cli check` /
+`quiver-cli update` there instead.
 
 Origins live in `template/.agents/upstreams.json` (`repo`, `path`, `ref` per
 skill). `quiver-cli upstream` queries the GitHub Commits API for the latest
@@ -168,9 +200,9 @@ By default `init` uses the catalog bundled with the package. Teams can host
 their own catalog in a GitHub repo and point `init` at it:
 
 ```bash
-quiver-cli init --catalog github:acme/agent-catalog            # .agents at repo root
-quiver-cli init --catalog github:acme/monorepo/tools/.agents   # subdirectory
-quiver-cli init --catalog github:acme/agent-catalog#v2         # branch or tag
+quiver-cli init --catalog=github:acme/agent-catalog            # .agents at repo root
+quiver-cli init --catalog=github:acme/monorepo/tools/.agents   # subdirectory
+quiver-cli init --catalog=github:acme/agent-catalog#v2         # branch or tag
 ```
 
 The source is recorded in `quiver.lock` together with the **resolved commit
@@ -183,6 +215,7 @@ SHA** (`catalog.ref` / `catalog.resolved`):
 
 Catalogs are downloaded via the GitHub tarball API and cached under
 `~/.cache/quiver/catalogs/` (content-addressed by commit SHA, immutable).
+`XDG_CACHE_HOME` is honoured if set.
 
 ### Private repos & tokens
 
@@ -217,8 +250,9 @@ the committed `config.toml`.
 ## Staying up to date
 
 quiver-cli checks npm for a newer release (at most once a day, cached under
-`~/.cache/quiver/`) and prints a one-line notice after a command when an update
-is available. `quiver-cli version` checks on demand. Update with:
+`~/.cache/quiver/`, or `XDG_CACHE_HOME` if set) and prints a one-line notice
+after a command when an update is available. `quiver-cli version` checks on
+demand. Update with:
 
 ```bash
 pnpm add -g quiver-cli   # or: npm i -g quiver-cli / yarn global add quiver-cli

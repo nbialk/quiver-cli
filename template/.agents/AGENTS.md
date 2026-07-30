@@ -20,7 +20,7 @@ them directly.
 ## Workflow
 
 - `quiver-cli sync` — regenerate provider configs from `.agents/`.
-- `quiver-cli status` — verify lockfile and shims are in sync.
+- `quiver-cli check` — verify lockfile, shims and MCP tool snapshots.
 - `quiver-cli add/remove <id>` — change what is installed.
 - Commit `.agents/` and `quiver.lock`; never commit generated provider files
   or `.env.local`.
