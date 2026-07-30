@@ -91,7 +91,7 @@ const guardWritableCatalog = async (
     "upstream is a catalog-maintenance command and the catalog here is not " +
       "writable (the installed package or a remote cache).\n" +
       "Run it inside the quiver-cli repo, or point at a writable local " +
-      "catalog with --catalog <path>.\n" +
+      "catalog with --catalog=local:/absolute/path/.agents.\n" +
       "To update a consuming repo's installed entries, use quiver-cli check " +
       "/ quiver-cli update instead.",
   );
@@ -271,18 +271,25 @@ const report = async (
 
   ui.block(lines);
 
-  // Drift detail / next steps, only when there is action to take.
-  const drifted = sorted.filter(
-    (r) => r.status === "drift" || r.status === "drift-curated",
-  );
-  if (drifted.length) {
+  // Drift detail / next steps, only when there is action to take. Plain drift
+  // collapses into one `pull` line; curated skills need individual handling.
+  const drifted = sorted.filter((r) => r.status === "drift");
+  const curated = sorted.filter((r) => r.status === "drift-curated");
+  if (drifted.length || curated.length) {
     const hint: string[] = [""];
-    for (const r of drifted) {
-      const note =
-        r.status === "drift-curated"
-          ? "curated — reconcile changes by hand"
-          : "re-fetch with the skills CLI, then copy into the catalog";
-      hint.push(`  ${c.yellow(r.name)}: ${c.dim(note)}`);
+    if (drifted.length) {
+      hint.push(
+        `  ${c.cyan("quiver-cli upstream pull")}  ${c.dim(
+          `update the catalog copy (${drifted.map((r) => r.name).join(", ")})`,
+        )}`,
+      );
+    }
+    for (const r of curated) {
+      hint.push(
+        `  ${c.yellow(r.name)}: ${c.dim(
+          "curated — reconcile by hand, or upstream pull --force",
+        )}`,
+      );
     }
     ui.block(hint);
   }
