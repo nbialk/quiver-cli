@@ -83,17 +83,23 @@ export const update = async (options: CliOptions): Promise<void> => {
       repoCatalog,
       lock,
       options.force,
+      options.dryRun,
     );
     if (report.status === "updated") changed = true;
     reports.push(report);
   }
 
-  if (changed || catalogMoved) {
-    writeLockfile(options.targetRoot, lock);
-  }
-  if (changed) {
-    const { catalog } = loadRepoCatalog(options.targetRoot, lock.catalog.source);
-    writeProviders(options.targetRoot, catalog, lock);
+  if (!options.dryRun) {
+    if (changed || catalogMoved) {
+      writeLockfile(options.targetRoot, lock);
+    }
+    if (changed) {
+      const { catalog } = loadRepoCatalog(
+        options.targetRoot,
+        lock.catalog.source,
+      );
+      writeProviders(options.targetRoot, catalog, lock);
+    }
   }
 
   report(reports, options);
@@ -107,6 +113,7 @@ const applyUpdate = (
   repoCatalog: Catalog,
   lock: Lockfile,
   force: boolean,
+  dryRun: boolean,
 ): UpdateReport => {
   const id = `${parsed.type}:${parsed.name}`;
 
@@ -118,6 +125,7 @@ const applyUpdate = (
     if (repo && repo.digest !== entry.digest && !force) {
       return { id, status: "local-changes" };
     }
+    if (dryRun) return { id, status: "updated" };
     const dest = resolve(targetRoot, ".agents", src.sourcePath);
     rmSync(dest, { recursive: true, force: true });
     mkdirSync(dirname(dest), { recursive: true });
@@ -136,6 +144,7 @@ const applyUpdate = (
     if (repo && repo.digest !== entry.digest && !force) {
       return { id, status: "local-changes" };
     }
+    if (dryRun) return { id, status: "updated" };
     const dest = resolve(targetRoot, ".agents", src.sourcePath);
     mkdirSync(dirname(dest), { recursive: true });
     cpSync(src.absPath, dest, { force: true });
@@ -152,6 +161,7 @@ const applyUpdate = (
     if (repo && repo.digest !== entry.digest && !force) {
       return { id, status: "local-changes" };
     }
+    if (dryRun) return { id, status: "updated" };
     const dest = resolve(targetRoot, ".agents", src.sourcePath);
     mkdirSync(dirname(dest), { recursive: true });
     cpSync(src.absPath, dest, { force: true });
@@ -178,6 +188,7 @@ const applyUpdate = (
   if (repo && repo.configDigest !== entry.configDigest && !force) {
     return { id, status: "local-changes" };
   }
+  if (dryRun) return { id, status: "updated" };
   const configPath = resolve(targetRoot, ".agents", "config.json");
   const config = JSON.parse(readFileSync(configPath, "utf8")) as {
     mcpServers?: Record<string, unknown>;
@@ -201,6 +212,7 @@ const report = (reports: UpdateReport[], options: CliOptions): void => {
       JSON.stringify(
         {
           ok: true,
+          dryRun: options.dryRun,
           updated: by("updated").map((r) => r.id),
           upToDate: by("up-to-date").map((r) => r.id),
           localChanges: by("local-changes").map((r) => r.id),
@@ -215,7 +227,8 @@ const report = (reports: UpdateReport[], options: CliOptions): void => {
 
   const c = ui.palette();
   const lines: string[] = [""];
-  for (const r of by("updated")) lines.push(`  ${c.cyan("↑")} ${r.id}  updated`);
+  const verb = options.dryRun ? "would update" : "updated";
+  for (const r of by("updated")) lines.push(`  ${c.cyan("↑")} ${r.id}  ${verb}`);
   for (const r of by("local-changes"))
     lines.push(
       `  ${c.yellow("▲")} ${r.id}  ${c.yellow("local changes - skipped (use --force)")}`,
@@ -230,7 +243,13 @@ const report = (reports: UpdateReport[], options: CliOptions): void => {
     "",
     `  ${
       updated
-        ? c.cyan(`↑ ${updated} updated - review and commit .agents/ + quiver.lock`)
+        ? options.dryRun
+          ? c.cyan(
+              `↑ ${updated} would be updated - run without --dry-run to apply`,
+            )
+          : c.cyan(
+              `↑ ${updated} updated - review and commit .agents/ + quiver.lock`,
+            )
         : c.green("✓ everything up to date with the catalog")
     }`,
     "",

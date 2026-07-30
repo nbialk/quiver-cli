@@ -10,6 +10,8 @@ export interface CliOptions {
   verbose: boolean;
   accept: boolean;
   offline: boolean;
+  /** From --dry-run - report what would change without writing (update). */
+  dryRun: boolean;
   introspectStdio: boolean;
   /** From --providers=a,b - validated by the consuming command. */
   providers: string[] | null;
@@ -46,6 +48,7 @@ Options:
   -V, --verbose        Show full tool lists and description diffs (check)
   --accept             Record the current MCP tool snapshots as the new baseline (check)
   --offline            Skip MCP re-introspection; check digests + shims only (check)
+  --dry-run            Report what would change without writing (update)
   --providers=a,b      Generate configs only for these tools (init, sync, providers)
   --catalog=<source>   Catalog source for init (e.g. github:owner/repo[/path][#ref])
   --introspect-stdio   Allow introspecting stdio MCP servers (runs foreign code)
@@ -64,6 +67,7 @@ const KNOWN_FLAGS = new Set([
   "-V",
   "--accept",
   "--offline",
+  "--dry-run",
   "--introspect-stdio",
   "--help",
   "-h",
@@ -112,6 +116,7 @@ export const parse = (
       verbose: flags.has("--verbose") || flags.has("-V"),
       accept: flags.has("--accept"),
       offline: flags.has("--offline"),
+      dryRun: flags.has("--dry-run"),
       introspectStdio: flags.has("--introspect-stdio"),
       providers,
       catalog,

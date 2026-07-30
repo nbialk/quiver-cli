@@ -14,11 +14,13 @@ describe("parse", () => {
       "check",
       "--json",
       "--offline",
+      "--dry-run",
       "-V",
     ]);
     expect(unknownFlags).toEqual([]);
     expect(options.json).toBe(true);
     expect(options.offline).toBe(true);
+    expect(options.dryRun).toBe(true);
     expect(options.verbose).toBe(true);
   });
 
