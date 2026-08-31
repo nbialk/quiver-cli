@@ -7,6 +7,7 @@ import { readLockfile, writeLockfile } from "../lockfile/io.js";
 import { parseEntryId, type McpEntry } from "../lockfile/schema.js";
 import { diffSnapshots, isEmptyDiff, type ToolDiff } from "../mcp/diff.js";
 import { introspect } from "../mcp/introspect.js";
+import { findOpencodeToken } from "../mcp/opencode-auth.js";
 import { toSnapshot } from "../mcp/snapshot.js";
 import { disabledMcpServers } from "../providers/local-config.js";
 import { checkProviders } from "../providers/write.js";
@@ -27,6 +28,7 @@ interface McpReport {
   id: string;
   status: "ok" | "baseline" | "skipped" | "drift" | "accepted";
   reason?: string;
+  authRequired?: boolean;
   diff?: ToolDiff;
 }
 
@@ -101,14 +103,32 @@ export const check = async (options: CliOptions): Promise<void> => {
     checked.mcp += 1;
 
     const server = interpolateEnvVars(catMcp.server);
-    const res = await introspect(server, { allowStdio: options.introspectStdio });
+    const mcpEntry = entry as McpEntry;
+    // OAuth-protected HTTP servers: reuse opencode's access token (read-only).
+    const cred =
+      server.transport === "http"
+        ? findOpencodeToken(p.name, server.url)
+        : ({ status: "none" } as const);
+    const res = await introspect(server, {
+      allowStdio: options.introspectStdio,
+      authToken: cred.status === "ok" ? cred.accessToken : undefined,
+    });
     if (!res.ok) {
-      mcpReports.push({ id, status: "skipped", reason: res.reason });
+      if (res.authRequired && !mcpEntry.authRequired) {
+        mcpEntry.authRequired = true;
+        lockChanged = true;
+      }
+      const reason = res.authRequired ? authHint(cred.status, p.name) : res.reason;
+      mcpReports.push({
+        id,
+        status: "skipped",
+        reason,
+        ...(res.authRequired ? { authRequired: true } : {}),
+      });
       continue;
     }
 
     const current = toSnapshot(res.tools);
-    const mcpEntry = entry as McpEntry;
 
     if (!mcpEntry.tools) {
       // First successful introspection: record baseline.
@@ -209,9 +229,19 @@ const report = async (
     );
   }
 
-  // Skipped servers (e.g. stdio without --introspect-stdio) are the common,
-  // expected case - collapse them into a single line instead of one each.
-  const skipped = mcpReports.filter((r) => r.status === "skipped");
+  // OAuth-protected servers have an actionable fix - always show the reason.
+  const authSkipped = mcpReports.filter(
+    (r) => r.status === "skipped" && r.authRequired,
+  );
+  for (const r of authSkipped) {
+    await ui.warn(`${r.id}: ${r.reason}`);
+  }
+
+  // Other skipped servers (e.g. stdio without --introspect-stdio) are the
+  // common, expected case - collapse them into a single line instead of one each.
+  const skipped = mcpReports.filter(
+    (r) => r.status === "skipped" && !r.authRequired,
+  );
   if (skipped.length) {
     const names = skipped.map((r) => parseEntryId(r.id)?.name ?? r.id);
     await ui.info(
@@ -327,6 +357,18 @@ export const summarize = (c: CheckedCounts): string => {
   if (c.mcp) parts.push(plural(c.mcp, "MCP server"));
   if (c.plugins) parts.push(plural(c.plugins, "plugin"));
   return parts.length ? parts.join(", ") : "nothing";
+};
+
+// Actionable skip reason for OAuth-protected servers, based on what we found
+// in opencode's credential store.
+export const authHint = (
+  cred: "ok" | "expired" | "none",
+  name: string,
+): string => {
+  const reauth = `run 'opencode mcp auth ${name}', then 'quiver-cli check'`;
+  if (cred === "expired") return `OAuth token expired — re-${reauth}`;
+  if (cred === "ok") return `OAuth token rejected — re-${reauth}`;
+  return `requires OAuth — ${reauth}`;
 };
 
 export const hasCommand = (command: string): boolean => {

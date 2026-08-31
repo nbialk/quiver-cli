@@ -160,9 +160,15 @@ This is the basis for `sync` and `check`.
   poisoning), shown as a readable before/after.
 
 The first successful introspection records a baseline; subsequent `check` runs
-diff against it. Servers that fail introspection (e.g. requiring interactive
-OAuth) are reported as skipped. stdio servers run foreign code and are only
-introspected with `--introspect-stdio`.
+diff against it. stdio servers run foreign code and are only introspected with
+`--introspect-stdio`.
+
+**OAuth-protected servers** (e.g. Linear): `check` reuses opencode's MCP
+credentials (`~/.local/share/opencode/mcp-auth.json`, read-only — quiver never
+refreshes or rewrites them). Authenticate once with
+`opencode mcp auth <name>`, then re-run `quiver-cli check` to record the tool
+snapshot. Without a valid token the server is skipped with an actionable hint,
+and `quiver-cli list` shows why the tool count is missing.
 
 Pass `--offline` to skip MCP re-introspection entirely and check only digests
 and provider shims — no network, no foreign code, useful for a fast local

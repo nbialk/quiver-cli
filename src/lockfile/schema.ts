@@ -54,6 +54,8 @@ export interface McpEntry {
   /** tools/list snapshot, keyed by tool name; null until introspected. */
   tools: Record<string, McpToolSnapshot> | null;
   toolsFetchedAt: string | null;
+  /** True once the server rejected unauthenticated introspection (OAuth). */
+  authRequired?: boolean;
 }
 
 export interface PluginEntry {

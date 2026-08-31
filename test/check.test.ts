@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { hasCommand, summarize } from "../src/commands/check.js";
+import { authHint, hasCommand, summarize } from "../src/commands/check.js";
 
 describe("summarize", () => {
   it("lists all three kinds with pluralization", () => {
@@ -25,6 +25,23 @@ describe("summarize", () => {
     expect(summarize({ skills: 0, commands: 0, mcp: 0, plugins: 0 })).toBe(
       "nothing",
     );
+  });
+});
+
+describe("authHint", () => {
+  it("suggests the initial opencode auth when no token exists", () => {
+    expect(authHint("none", "linear")).toBe(
+      "requires OAuth — run 'opencode mcp auth linear', then 'quiver-cli check'",
+    );
+  });
+
+  it("suggests re-auth for expired tokens", () => {
+    expect(authHint("expired", "linear")).toContain("OAuth token expired");
+    expect(authHint("expired", "linear")).toContain("opencode mcp auth linear");
+  });
+
+  it("suggests re-auth for rejected tokens", () => {
+    expect(authHint("ok", "linear")).toContain("OAuth token rejected");
   });
 });
 

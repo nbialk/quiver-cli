@@ -8,7 +8,7 @@ export interface IntrospectedTool {
 
 export type IntrospectResult =
   | { ok: true; tools: IntrospectedTool[] }
-  | { ok: false; reason: string };
+  | { ok: false; reason: string; authRequired?: boolean };
 
 const CONNECT_TIMEOUT_MS = 15000;
 
@@ -28,7 +28,7 @@ const withTimeout = async <T>(p: Promise<T>, ms: number): Promise<T> => {
 // directly; stdio servers run foreign code and are gated behind allowStdio.
 export const introspect = async (
   server: McpServer,
-  { allowStdio }: { allowStdio: boolean },
+  { allowStdio, authToken }: { allowStdio: boolean; authToken?: string },
 ): Promise<IntrospectResult> => {
   const { Client } = await import("@modelcontextprotocol/sdk/client/index.js");
 
@@ -38,8 +38,17 @@ export const introspect = async (
       const { StreamableHTTPClientTransport } = await import(
         "@modelcontextprotocol/sdk/client/streamableHttp.js"
       );
-      const requestInit: RequestInit = server.headers
-        ? { headers: server.headers }
+      const headers: Record<string, string> = { ...(server.headers ?? {}) };
+      // Configured headers win; only inject the OAuth token when the config
+      // does not set its own Authorization header.
+      const hasAuthHeader = Object.keys(headers).some(
+        (k) => k.toLowerCase() === "authorization",
+      );
+      if (authToken && !hasAuthHeader) {
+        headers["Authorization"] = `Bearer ${authToken}`;
+      }
+      const requestInit: RequestInit = Object.keys(headers).length
+        ? { headers }
         : {};
       transport = new StreamableHTTPClientTransport(new URL(server.url), {
         requestInit,
@@ -79,6 +88,9 @@ export const introspect = async (
     }));
     return { ok: true, tools };
   } catch (e) {
+    if (await isAuthError(e)) {
+      return { ok: false, reason: errMsg(e), authRequired: true };
+    }
     return { ok: false, reason: errMsg(e) };
   } finally {
     try {
@@ -91,3 +103,25 @@ export const introspect = async (
 
 const errMsg = (e: unknown): string =>
   e instanceof Error ? e.message : String(e);
+
+// Detect "needs OAuth" failures. The SDK surfaces 401s in several shapes:
+// UnauthorizedError, StreamableHTTPError with code 401 (message omits the
+// status), or plain errors mentioning 401/unauthorized/invalid_token.
+export const isAuthError = async (e: unknown): Promise<boolean> => {
+  try {
+    const { UnauthorizedError } = await import(
+      "@modelcontextprotocol/sdk/client/auth.js"
+    );
+    if (e instanceof UnauthorizedError) return true;
+  } catch {
+    /* fall through to shape/message heuristics */
+  }
+  if (
+    typeof e === "object" &&
+    e !== null &&
+    (e as { code?: unknown }).code === 401
+  ) {
+    return true;
+  }
+  return /\b401\b|unauthorized|invalid_token/i.test(errMsg(e));
+};

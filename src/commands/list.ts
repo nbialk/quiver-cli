@@ -82,6 +82,7 @@ export const list = async (options: CliOptions): Promise<void> => {
             enabled: !disabled.has(name),
             detail: serverDetail.get(name) ?? null,
             toolCount: entry.tools ? Object.keys(entry.tools).length : null,
+            authRequired: entry.authRequired ?? false,
           })),
           plugins: plugins.map(({ name, entry }) => ({
             name,
@@ -130,6 +131,7 @@ export const list = async (options: CliOptions): Promise<void> => {
   }
 
   let missingTools = false;
+  const needsAuth: string[] = [];
   if (mcp.length) {
     const nameW = Math.max(...mcp.map((e) => e.name.length));
     const toolW = Math.max(
@@ -141,7 +143,10 @@ export const list = async (options: CliOptions): Promise<void> => {
     lines.push("", `  ${c.bold("mcp servers")}`);
     for (const { name, entry } of mcp) {
       const count = entry.tools ? Object.keys(entry.tools).length : null;
-      if (count === null) missingTools = true;
+      if (count === null) {
+        if (entry.authRequired) needsAuth.push(name);
+        else missingTools = true;
+      }
       const tools = padCell(
         `${count ?? "?"} tools`,
         toolW,
@@ -177,6 +182,13 @@ export const list = async (options: CliOptions): Promise<void> => {
       `${skills.length} skills · ${commands.length} commands · ${mcp.length} MCP servers · ${plugins.length} plugins`,
     )}  ${c.dim(`providers: ${providers}`)}`,
   );
+  for (const name of needsAuth) {
+    lines.push(
+      `  ${c.yellow(`${name} requires OAuth`)} ${c.dim(
+        `— run 'opencode mcp auth ${name}', then 'quiver-cli check'`,
+      )}`,
+    );
+  }
   if (missingTools) {
     lines.push(`  ${c.dim("run 'quiver-cli check' to populate tool counts")}`);
   }
