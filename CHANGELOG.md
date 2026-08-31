@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/nbialk/quiver-cli/compare/v1.0.0...v1.1.0) (2026-08-31)
+
+
+### Features
+
+* add enable/disable commands to toggle MCP servers locally ([131b2ec](https://github.com/nbialk/quiver-cli/commit/131b2ec2bc1262aa76cfdc95b84f3b3b0095bf6f))
+
 ## [1.0.0](https://github.com/nbialk/quiver-cli/compare/v0.8.0...v1.0.0) (2026-07-30)
 
 
