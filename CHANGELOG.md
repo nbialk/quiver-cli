@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.0](https://github.com/nbialk/quiver-cli/compare/v1.2.0...v1.3.0) (2026-08-31)
+
+
+### Features
+
+* **inspect:** add inspect command for MCP server tool details ([49e5982](https://github.com/nbialk/quiver-cli/commit/49e5982e462f7e56048dc575bd3f0db71d28acdc))
+* **mcp:** record per-tool token estimates in lock snapshots ([e88d929](https://github.com/nbialk/quiver-cli/commit/e88d929d14a9d059f4b385f9faf64423bfa6ff51))
+
 ## [1.2.0](https://github.com/nbialk/quiver-cli/compare/v1.1.0...v1.2.0) (2026-08-31)
 
 
