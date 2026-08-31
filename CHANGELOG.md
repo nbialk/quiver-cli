@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/nbialk/quiver-cli/compare/v1.1.0...v1.2.0) (2026-08-31)
+
+
+### Features
+
+* **check:** reuse opencode OAuth tokens for MCP introspection ([efeb505](https://github.com/nbialk/quiver-cli/commit/efeb505400450faa0f8a16d94756ddda09d1ba18))
+
 ## [1.1.0](https://github.com/nbialk/quiver-cli/compare/v1.0.0...v1.1.0) (2026-08-31)
 
 
