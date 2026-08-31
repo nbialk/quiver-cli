@@ -35,6 +35,7 @@ Commands:
   providers [a,b]  Change which tools get configs (claude, opencode, codex)
   update [id]      Pull newer catalog content into .agents/ (all or one entry)
   list             Show installed entries (skills, commands, plugins, MCP tool counts)
+  inspect <name>   Show an MCP server's tools with descriptions and token cost
   check            Detect drift: skill digests, provider shims, MCP tool
                    snapshots (--offline skips MCP re-introspection)
   upstream         Catalog maintenance: check source repos for skill updates
@@ -46,8 +47,9 @@ Commands:
 Options:
   -f, --force          Overwrite existing files
   --all, -y            Keep everything without prompting (non-interactive)
-  --json               Machine-readable output (check/upstream/list)
-  -V, --verbose        Show full tool lists and description diffs (check)
+  --json               Machine-readable output (check/upstream/list/inspect)
+  -V, --verbose        Show full tool lists and description diffs (check);
+                       full tool descriptions (inspect)
   --accept             Record the current MCP tool snapshots as the new baseline (check)
   --offline            Skip MCP re-introspection; check digests + shims only (check)
   --dry-run            Report what would change without writing (update)
@@ -194,6 +196,11 @@ export const run = async (): Promise<void> => {
     case "ls": {
       const { list } = await import("./commands/list.js");
       await list(options);
+      break;
+    }
+    case "inspect": {
+      const { inspect } = await import("./commands/inspect.js");
+      await inspect(options);
       break;
     }
     case "check": {
