@@ -38,6 +38,14 @@ describe("diffSnapshots", () => {
     ]);
   });
 
+  it("ignores token estimates (old snapshots without tokens are not drift)", () => {
+    const withTokens = snap({ t: { description: "d", schema: {} } });
+    const withoutTokens: Record<string, McpToolSnapshot> = {
+      t: { description: "d", inputSchemaHash: withTokens["t"]!.inputSchemaHash },
+    };
+    expect(isEmptyDiff(diffSnapshots(withoutTokens, withTokens))).toBe(true);
+  });
+
   it("flags schema change via hash", () => {
     const before = snap({ t: { description: "d", schema: { type: "object" } } });
     const after = snap({

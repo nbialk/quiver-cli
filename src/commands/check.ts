@@ -8,7 +8,7 @@ import { parseEntryId, type McpEntry } from "../lockfile/schema.js";
 import { diffSnapshots, isEmptyDiff, type ToolDiff } from "../mcp/diff.js";
 import { introspect } from "../mcp/introspect.js";
 import { findOpencodeToken } from "../mcp/opencode-auth.js";
-import { toSnapshot } from "../mcp/snapshot.js";
+import { backfillTokens, toSnapshot } from "../mcp/snapshot.js";
 import { disabledMcpServers } from "../providers/local-config.js";
 import { checkProviders } from "../providers/write.js";
 import { interpolateEnvVars, loadEnvLocal } from "../secrets/interpolate.js";
@@ -141,6 +141,8 @@ export const check = async (options: CliOptions): Promise<void> => {
 
     const diff = diffSnapshots(mcpEntry.tools, current);
     if (isEmptyDiff(diff)) {
+      // Backfill token estimates on snapshots recorded before they existed.
+      if (backfillTokens(mcpEntry.tools, current)) lockChanged = true;
       mcpReports.push({ id, status: "ok" });
     } else if (options.accept) {
       // Record the current snapshot as the new baseline.

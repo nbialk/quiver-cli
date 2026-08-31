@@ -8,6 +8,7 @@ import {
   type PluginEntry,
   type SkillEntry,
 } from "../lockfile/schema.js";
+import { formatTokens, sumTokens } from "../mcp/tokens.js";
 import { disabledMcpServers } from "../providers/local-config.js";
 import * as ui from "../ui/prompts.js";
 
@@ -82,6 +83,7 @@ export const list = async (options: CliOptions): Promise<void> => {
             enabled: !disabled.has(name),
             detail: serverDetail.get(name) ?? null,
             toolCount: entry.tools ? Object.keys(entry.tools).length : null,
+            tokenEstimate: entry.tools ? sumTokens(entry.tools) : null,
             authRequired: entry.authRequired ?? false,
           })),
           plugins: plugins.map(({ name, entry }) => ({
@@ -140,22 +142,36 @@ export const list = async (options: CliOptions): Promise<void> => {
         return `${n ?? "?"} tools`.length;
       }),
     );
+    const tokenCell = (entry: McpEntry): string => {
+      const total = entry.tools ? sumTokens(entry.tools) : null;
+      return total === null ? "? tok" : formatTokens(total);
+    };
+    const tokW = Math.max(...mcp.map((e) => tokenCell(e.entry).length));
     lines.push("", `  ${c.bold("mcp servers")}`);
     for (const { name, entry } of mcp) {
       const count = entry.tools ? Object.keys(entry.tools).length : null;
+      const tokenTotal = entry.tools ? sumTokens(entry.tools) : null;
       if (count === null) {
         if (entry.authRequired) needsAuth.push(name);
         else missingTools = true;
+      } else if (tokenTotal === null) {
+        // Snapshot predates token estimates; check backfills them.
+        missingTools = true;
       }
       const tools = padCell(
         `${count ?? "?"} tools`,
         toolW,
         count === null ? c.dim : c.green,
       );
+      const tokens = padCell(
+        tokenCell(entry),
+        tokW,
+        tokenTotal === null ? c.dim : c.cyan,
+      );
       const detail = serverDetail.get(name);
       const off = disabled.has(name) ? `  ${c.yellow("disabled")}` : "";
       lines.push(
-        `    ${name.padEnd(nameW)} ${entry.transport.padEnd(5)} ${tools}` +
+        `    ${name.padEnd(nameW)} ${entry.transport.padEnd(5)} ${tools}  ${tokens}` +
           (detail ? `  ${c.dim(detail)}` : "") +
           off,
       );
@@ -190,7 +206,9 @@ export const list = async (options: CliOptions): Promise<void> => {
     );
   }
   if (missingTools) {
-    lines.push(`  ${c.dim("run 'quiver-cli check' to populate tool counts")}`);
+    lines.push(
+      `  ${c.dim("run 'quiver-cli check' to populate tool counts and token estimates")}`,
+    );
   }
   lines.push("");
   ui.block(lines);

@@ -44,6 +44,8 @@ export interface McpToolSnapshot {
   description: string;
   /** sha256 of the canonicalised inputSchema. */
   inputSchemaHash: string;
+  /** Rough context cost (chars/4 over name+description+schema); absent in old lockfiles. */
+  tokens?: number;
 }
 
 export interface McpEntry {
