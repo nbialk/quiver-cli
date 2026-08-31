@@ -8,6 +8,7 @@ import {
   type PluginEntry,
   type SkillEntry,
 } from "../lockfile/schema.js";
+import { disabledMcpServers } from "../providers/local-config.js";
 import * as ui from "../ui/prompts.js";
 
 const truncate = (s: string, max: number): string => {
@@ -62,6 +63,8 @@ export const list = async (options: CliOptions): Promise<void> => {
     group.sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  const disabled = disabledMcpServers(options.targetRoot);
+
   if (options.json) {
     console.log(
       JSON.stringify(
@@ -76,6 +79,7 @@ export const list = async (options: CliOptions): Promise<void> => {
           mcp: mcp.map(({ name, entry }) => ({
             name,
             transport: entry.transport,
+            enabled: !disabled.has(name),
             detail: serverDetail.get(name) ?? null,
             toolCount: entry.tools ? Object.keys(entry.tools).length : null,
           })),
@@ -144,9 +148,11 @@ export const list = async (options: CliOptions): Promise<void> => {
         count === null ? c.dim : c.green,
       );
       const detail = serverDetail.get(name);
+      const off = disabled.has(name) ? `  ${c.yellow("disabled")}` : "";
       lines.push(
         `    ${name.padEnd(nameW)} ${entry.transport.padEnd(5)} ${tools}` +
-          (detail ? `  ${c.dim(detail)}` : ""),
+          (detail ? `  ${c.dim(detail)}` : "") +
+          off,
       );
     }
   }

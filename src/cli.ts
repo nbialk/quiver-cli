@@ -29,6 +29,8 @@ Commands:
   init             Interactive picker over the catalog; write native configs + quiver.lock
   add <id>         Add an entry (skill:<name>, command:<name>, mcp:<name>, plugin:<name>)
   remove <id>      Remove a single entry; keep lockfile + configs consistent
+  disable <id>     Turn an MCP server off locally (mcp:<name>, gitignored override)
+  enable <id>      Turn a locally disabled MCP server back on
   sync             Regenerate provider configs from .agents/ (warns on drift)
   providers [a,b]  Change which tools get configs (claude, opencode, codex)
   update [id]      Pull newer catalog content into .agents/ (all or one entry)
@@ -165,6 +167,12 @@ export const run = async (): Promise<void> => {
     case "rm": {
       const { remove } = await import("./commands/remove.js");
       await remove(options);
+      break;
+    }
+    case "enable":
+    case "disable": {
+      const { toggle } = await import("./commands/toggle.js");
+      await toggle(options, command === "enable");
       break;
     }
     case "sync": {

@@ -3,7 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { patchGitignore } from "../src/commands/gitignore.js";
+import {
+  ensureLocalOverrideIgnored,
+  patchGitignore,
+} from "../src/commands/gitignore.js";
 import { collectEnvVars } from "../src/secrets/interpolate.js";
 
 let dir: string;
@@ -41,7 +44,7 @@ describe("patchGitignore", () => {
 
   it("is a no-op when everything is present", () => {
     setup(
-      ".claude/\n.opencode/\n.codex/\n.mcp.json\nopencode.json\nAGENTS.md\nCLAUDE.md\n.env.local\n",
+      ".claude/\n.opencode/\n.codex/\n.mcp.json\nopencode.json\nAGENTS.md\nCLAUDE.md\n.env.local\n.agents/config.local.json\n",
     );
     expect(patchGitignore(dir)).toBe(false);
   });
@@ -53,6 +56,22 @@ describe("patchGitignore", () => {
     expect(patchGitignore(dir)).toBe(true);
     const out = readFileSync(join(dir, ".gitignore"), "utf8");
     expect(out.split("\n").map((l) => l.trim())).toContain(".env.local");
+  });
+});
+
+describe("ensureLocalOverrideIgnored", () => {
+  it("appends the override entry when missing", () => {
+    setup("node_modules\n");
+    expect(ensureLocalOverrideIgnored(dir)).toBe(true);
+    const out = readFileSync(join(dir, ".gitignore"), "utf8");
+    expect(out.split("\n").map((l) => l.trim())).toContain(
+      ".agents/config.local.json",
+    );
+  });
+
+  it("is a no-op when already ignored", () => {
+    setup(".agents/config.local.json\n");
+    expect(ensureLocalOverrideIgnored(dir)).toBe(false);
   });
 });
 

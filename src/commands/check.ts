@@ -8,6 +8,7 @@ import { parseEntryId, type McpEntry } from "../lockfile/schema.js";
 import { diffSnapshots, isEmptyDiff, type ToolDiff } from "../mcp/diff.js";
 import { introspect } from "../mcp/introspect.js";
 import { toSnapshot } from "../mcp/snapshot.js";
+import { disabledMcpServers } from "../providers/local-config.js";
 import { checkProviders } from "../providers/write.js";
 import { interpolateEnvVars, loadEnvLocal } from "../secrets/interpolate.js";
 import * as ui from "../ui/prompts.js";
@@ -82,6 +83,7 @@ export const check = async (options: CliOptions): Promise<void> => {
   // --- MCP tool snapshot drift (re-introspection) --------------------------
   // Skipped entirely in --offline mode (no network, no foreign code).
   const mcpReports: McpReport[] = [];
+  const disabled = disabledMcpServers(options.targetRoot);
   let lockChanged = false;
 
   for (const [id, entry] of Object.entries(lock.entries)) {
@@ -90,6 +92,12 @@ export const check = async (options: CliOptions): Promise<void> => {
     const p = parseEntryId(id)!;
     const catMcp = catalog.mcp.find((m) => m.name === p.name);
     if (!catMcp) continue;
+    // Locally disabled servers keep their snapshot as the baseline but are
+    // not re-introspected (they may be off precisely to avoid the cost).
+    if (disabled.has(p.name)) {
+      mcpReports.push({ id, status: "skipped", reason: "disabled locally" });
+      continue;
+    }
     checked.mcp += 1;
 
     const server = interpolateEnvVars(catMcp.server);

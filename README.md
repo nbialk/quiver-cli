@@ -50,6 +50,8 @@ quiver-cli check              # detect drift (CI-friendly: --json, exit 1)
 | `quiver-cli init`          | Interactive picker; write native configs + `quiver.lock`          |
 | `quiver-cli add <id>`      | Add one entry (`skill:`, `command:`, `mcp:`, `plugin:`)           |
 | `quiver-cli remove <id>`   | Remove one entry; keep lockfile + configs consistent (alias: `rm`)|
+| `quiver-cli disable <id>`  | Turn an MCP server off locally (`mcp:<name>`, gitignored override)|
+| `quiver-cli enable <id>`   | Turn a locally disabled MCP server back on                        |
 | `quiver-cli update [id]`   | Pull newer catalog content into `.agents/` (all or one entry)     |
 | `quiver-cli sync`          | Regenerate provider configs from `.agents/`; warn on drift        |
 | `quiver-cli providers`     | Change which tools get configs (`opencode`, `claude`, `codex`)    |
@@ -119,6 +121,21 @@ separately, then enable the adapter per repository:
 quiver-cli add plugin:rtk
 quiver-cli check             # also verifies that the rtk binary is on PATH
 ```
+
+## Toggling MCP servers locally
+
+Some MCP servers are only worth their token cost for specific tasks. Instead
+of removing them, switch them off locally:
+
+```bash
+quiver-cli disable mcp:posthog   # drop it from the generated provider configs
+quiver-cli enable mcp:posthog    # bring it back - instant, no re-introspection
+```
+
+The state lives in `.agents/config.local.json` (gitignored), so toggling never
+touches the committed `.agents/config.json`, `quiver.lock` or your teammates'
+setups. Disabled servers keep their lockfile entry and tool snapshot; `list`
+marks them as `disabled`, and `check` skips their re-introspection.
 
 ## The lockfile
 

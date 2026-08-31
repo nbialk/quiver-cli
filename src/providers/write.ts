@@ -15,6 +15,7 @@ import {
   type ManagedDir,
   type SymlinkOutput,
 } from "./fsops.js";
+import { disabledMcpServers } from "./local-config.js";
 import { planOpenCode } from "./opencode.js";
 import { resolveSelection } from "./selection.js";
 
@@ -45,6 +46,14 @@ const buildPlan = (
 } => {
   loadEnvLocal(targetRoot);
   const selected = resolveSelection(catalog, lock);
+
+  // Locally disabled servers (.agents/config.local.json) are left out of all
+  // generated provider configs - before env interpolation, so they also never
+  // trigger missing-env warnings.
+  const disabled = disabledMcpServers(targetRoot);
+  if (disabled.size) {
+    selected.mcp = selected.mcp.filter((m) => !disabled.has(m.name));
+  }
 
   // Only include MCP servers that are actually selected in the lockfile.
   const rawMcpServers: Record<string, McpServer> = {};
