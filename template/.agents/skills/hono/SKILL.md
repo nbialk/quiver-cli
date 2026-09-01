@@ -5,7 +5,15 @@ description: Use when building Hono web applications or when the user asks about
 
 # Hono Skill
 
-Build Hono web applications. This skill provides inline API knowledge for AI. Use `npx hono request` to test endpoints. If the `hono-docs` MCP server is configured, prefer its tools for the latest documentation over the inline reference.
+Build Hono web applications. This skill provides inline API knowledge for AI. Use `npx hono request` to test endpoints.
+
+## Latest Documentation
+
+For details beyond this inline reference, fetch the latest documentation from https://hono.dev. Get the index of doc pages from `https://hono.dev/llms.txt`, then fetch a page with the `Accept: text/markdown` header to receive it as Markdown:
+
+```bash
+curl -H "Accept: text/markdown" https://hono.dev/docs/helpers/cookie
+```
 
 ## Hono CLI Usage
 
@@ -231,11 +239,17 @@ import { timing } from 'hono/timing'
 import { cache } from 'hono/cache'
 import { bearerAuth } from 'hono/bearer-auth'
 import { jwt } from 'hono/jwt'
+import { jwk } from 'hono/jwk'
 import { csrf } from 'hono/csrf'
 import { ipRestriction } from 'hono/ip-restriction'
 import { bodyLimit } from 'hono/body-limit'
+import { timeout } from 'hono/timeout'
 import { requestId } from 'hono/request-id'
 import { methodOverride } from 'hono/method-override'
+import { methodNotAllowed } from 'hono/method-not-allowed'
+import { languageDetector } from 'hono/language'
+import { some, every, except } from 'hono/combine'
+import { contextStorage, getContext } from 'hono/context-storage'
 import { trailingSlash, trimTrailingSlash } from 'hono/trailing-slash'
 
 // Registration
@@ -372,7 +386,7 @@ app.get('/', (c) => {
 
 ### jsxRenderer Middleware
 
-Use `jsxRenderer` middleware for layouts. See `npx hono docs /docs/middleware/builtin/jsx-renderer` for details.
+Use `jsxRenderer` middleware for layouts. For details, see https://hono.dev/docs/middleware/builtin/jsx-renderer
 
 ### Async Components
 
@@ -529,7 +543,7 @@ import { upgradeWebSocket } from 'hono/cloudflare-workers' // or other adapter
 
 Available helpers: Accepts, Adapter, ConnInfo, Cookie, css, Dev, Factory, html, JWT, Proxy, Route, SSG, Streaming, Testing, WebSocket.
 
-For details, use `npx hono docs /docs/helpers/<helper-name>`.
+For details, see `https://hono.dev/docs/helpers/<helper-name>` (fetch with `Accept: text/markdown`).
 
 ### Factory
 

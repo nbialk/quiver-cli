@@ -2,15 +2,20 @@
 // the live-mode design-system panel can render. Deterministic, dependency-free.
 //
 // Two-layer: YAML frontmatter (machine-readable tokens) + markdown body
-// (prose with six canonical H2 sections). When frontmatter is present, it's
+// (prose with eight canonical H2 sections). When frontmatter is present, it's
 // exposed on `model.frontmatter` alongside the prose-scraped sections;
 // consumers can prefer frontmatter values and fall back to prose.
 
+// Array order is also match precedence: matchCanonicalSection's keyword-contained
+// pass returns the first entry a heading contains, so reordering this changes
+// which section an ambiguous heading resolves to.
 const CANONICAL_SECTIONS = [
   'Overview',
   'Colors',
   'Typography',
+  'Layout',
   'Elevation',
+  'Shapes',
   'Components',
   "Do's and Don'ts",
 ];
@@ -115,10 +120,71 @@ function stripInlineYamlComment(s) {
   return s;
 }
 
+// YAML double-quoted scalars process backslash escapes. Stripping the outer
+// quotes without unescaping leaves them in place, so a nested font family like
+//   fontFamily: "\"IBM Plex Sans\", system-ui, sans-serif"
+// keeps its literal backslashes and never matches the same family in CSS.
+// The full YAML 1.2 double-quote escape set (spec section 5.7).
+const YAML_SIMPLE_ESCAPES = {
+  '0': '\0',
+  a: '\x07',
+  b: '\b',
+  t: '\t',
+  n: '\n',
+  v: '\v',
+  f: '\f',
+  r: '\r',
+  e: '\x1b',
+  ' ': ' ',
+  '"': '"',
+  '/': '/',
+  '\\': '\\',
+  N: '\u0085',
+  _: '\u00a0',
+  L: '\u2028',
+  P: '\u2029',
+};
+const YAML_HEX_ESCAPE_LENGTHS = { x: 2, u: 4, U: 8 };
+
+function unescapeYamlDoubleQuoted(body) {
+  let out = '';
+  for (let i = 0; i < body.length; i++) {
+    const ch = body[i];
+    if (ch !== '\\' || i === body.length - 1) {
+      out += ch;
+      continue;
+    }
+    const next = body[i + 1];
+    if (Object.prototype.hasOwnProperty.call(YAML_SIMPLE_ESCAPES, next)) {
+      out += YAML_SIMPLE_ESCAPES[next];
+      i++;
+      continue;
+    }
+    // \xNN, \uNNNN, \UNNNNNNNN. Malformed or out-of-range sequences stay
+    // literal rather than corrupting the rest of the scalar.
+    const hexLen = YAML_HEX_ESCAPE_LENGTHS[next];
+    if (hexLen) {
+      const hex = body.slice(i + 2, i + 2 + hexLen);
+      const codePoint = hex.length === hexLen && /^[0-9a-fA-F]+$/.test(hex) ? parseInt(hex, 16) : -1;
+      if (codePoint >= 0 && codePoint <= 0x10ffff) {
+        out += String.fromCodePoint(codePoint);
+        i += 1 + hexLen;
+        continue;
+      }
+    }
+    out += ch;
+  }
+  return out;
+}
+
 function parseScalar(raw) {
   const s = raw.trim();
-  if ((s.startsWith('"') && s.endsWith('"')) || (s.startsWith("'") && s.endsWith("'"))) {
-    return s.slice(1, -1);
+  if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
+    return unescapeYamlDoubleQuoted(s.slice(1, -1));
+  }
+  // Single-quoted YAML escapes only the quote itself, by doubling it.
+  if (s.length >= 2 && s.startsWith("'") && s.endsWith("'")) {
+    return s.slice(1, -1).split("''").join("'");
   }
   if (s === 'true') return true;
   if (s === 'false') return false;
@@ -130,9 +196,6 @@ function parseScalar(raw) {
 
 const HEX_RE = /#[0-9a-fA-F]{3,8}\b/g;
 const OKLCH_RE = /oklch\([^)]+\)/gi;
-const RGBA_RE = /rgba?\([^)]+\)/gi;
-const BOX_SHADOW_RE = /(?:box-shadow:\s*)?((?:-?\d[\w\d\s\-.,/()#%]*)+)/;
-const NAMED_RULE_RE = /\*\*(The [^*]+?Rule)\.\*\*\s*(.+)/;
 
 // ---------- Section splitting ----------
 
@@ -266,47 +329,37 @@ function stripBold(s) {
 function extractNamedRules(lines) {
   const rules = [];
   const seen = new Set();
+  const addRule = (name, body, { allowDuplicate = false } = {}) => {
+    const key = name.toLowerCase();
+    if (!allowDuplicate && seen.has(key)) return;
+    seen.add(key);
+    rules.push({ name, body });
+  };
 
   // Style A (Impeccable): "**The X Rule.** body body body" — can span lines.
   const joined = lines.join('\n');
-  const inlineStart = /\*\*(The [^*]+?Rule)\.\*\*/g;
-  const inlineMatches = [];
-  let m;
-  while ((m = inlineStart.exec(joined)) !== null) {
-    inlineMatches.push({ name: m[1], start: m.index, end: inlineStart.lastIndex });
-  }
+  const inlineMatches = [...joined.matchAll(/\*\*(The [^*]+?Rule)\.\*\*/g)];
   for (let i = 0; i < inlineMatches.length; i++) {
-    const mm = inlineMatches[i];
-    const bodyEnd = i + 1 < inlineMatches.length ? inlineMatches[i + 1].start : joined.length;
+    const match = inlineMatches[i];
+    const bodyEnd = inlineMatches[i + 1]?.index ?? joined.length;
     const body = joined
-      .slice(mm.end, bodyEnd)
+      .slice(match.index + match[0].length, bodyEnd)
       .replace(/\n##[^\n]*$/s, '')
       .replace(/\n###[^\n]*$/s, '')
       .trim();
-    const name = stripBold(mm.name).trim();
-    seen.add(name.toLowerCase());
-    rules.push({ name, body: stripBold(body) });
+    // Preserve the inline format's historical behavior: repeated inline rules
+    // remain visible, while the later heading and bullet formats dedupe.
+    addRule(stripBold(match[1]).trim(), stripBold(body), { allowDuplicate: true });
   }
 
   // Style B (Stitch): `### The "X" Rule` or `### The X Fallback`, body is the
   // bullets/paragraphs until the next heading. Accept Rule / Fallback / Principle.
-  for (let i = 0; i < lines.length; i++) {
-    const h3 = lines[i].match(/^###\s+(.+?)\s*$/);
-    if (!h3) continue;
-    const headerName = stripBold(h3[1]).replace(/["“”]/g, '').trim();
+  for (const subsection of splitSubsections(lines).slice(1)) {
+    const headerName = stripBold(subsection.name).replace(/["“”]/g, '').trim();
     if (!/^The\b.*\b(Rule|Fallback|Principle)\b/i.test(headerName)) continue;
-    if (seen.has(headerName.toLowerCase())) continue;
 
-    const bodyLines = [];
-    for (let j = i + 1; j < lines.length; j++) {
-      if (/^##\s|^###\s/.test(lines[j])) break;
-      bodyLines.push(lines[j]);
-    }
-    const body = stripBold(bodyLines.join('\n').replace(/\n+/g, ' ')).trim();
-    if (body) {
-      seen.add(headerName.toLowerCase());
-      rules.push({ name: headerName, body });
-    }
+    const body = stripBold(subsection.lines.join('\n').replace(/\n+/g, ' ')).trim();
+    if (body) addRule(headerName, body);
   }
 
   // Style C (Stitch bullet form): "*   **The Layering Principle:** body"
@@ -316,9 +369,7 @@ function extractNamedRules(lines) {
     if (!mm) continue;
     const nameRaw = mm[1].replace(/[.:]\s*$/, '').replace(/["“”]/g, '').trim();
     if (!/^The\b.+\b(Rule|Fallback|Principle)$/i.test(nameRaw)) continue;
-    if (seen.has(nameRaw.toLowerCase())) continue;
-    seen.add(nameRaw.toLowerCase());
-    rules.push({ name: nameRaw, body: stripBold(mm[2]).trim() });
+    addRule(nameRaw, stripBold(mm[2]).trim());
   }
 
   return rules;
@@ -330,17 +381,16 @@ function extractOverview(section) {
   if (!section) return null;
   const text = section.lines.join('\n');
   const northStar = text.match(/\*\*Creative North Star:\s*"([^"]+)"\*\*/);
-  const keyChars = [];
   const keyCharMatch = text.match(/\*\*Key Characteristics:\*\*\s*\n([\s\S]+?)(?:\n##|\n###|$)/);
-  if (keyCharMatch) {
-    for (const line of keyCharMatch[1].split('\n')) {
-      const m = line.match(/^\s*[-*]\s+(.+)$/);
-      if (m) keyChars.push(stripBold(m[1].trim()));
-    }
-  }
+  const keyChars = keyCharMatch
+    ? collectBullets(keyCharMatch[1].split('\n')).map((bullet) => stripBold(bullet.trim()))
+    : [];
+  const prose = keyCharMatch
+    ? text.slice(0, keyCharMatch.index) + text.slice(keyCharMatch.index + keyCharMatch[0].length)
+    : text;
 
   // Philosophy paragraphs: everything that isn't a rule header or key-char block
-  const paragraphs = collectParagraphs(section.lines).filter(
+  const paragraphs = collectParagraphs(prose.split('\n')).filter(
     (p) =>
       !p.startsWith('**Creative North Star') &&
       !p.startsWith('**Key Characteristics')
@@ -485,36 +535,6 @@ function detectFormat(v) {
   return 'unknown';
 }
 
-function scanInlineColors(lines) {
-  const out = [];
-  for (const line of lines) {
-    if (!/^\s*[-*]\s/.test(line)) continue;
-    const trimmed = line.replace(/^\s*[-*]\s+/, '');
-    const color = parseColorBullet(trimmed);
-    if (color) out.push(color);
-  }
-  return out;
-}
-
-function parseStitchInlineGroups(lines) {
-  // Stitch writes: `*   **Primary (`#00478d` to `#005eb8`):** Use for "..."`
-  // Each bullet IS its own role. Group them under the spoken role name.
-  const out = [];
-  for (const line of lines) {
-    if (!/^\s*[-*]\s/.test(line)) continue;
-    const trimmed = line.replace(/^\s*[-*]\s+/, '').trim();
-    const m = trimmed.match(
-      /^\*\*([A-Z][a-zA-Z]+)\s*\(([^)]+)\):\*\*\s*(.*)$/
-    );
-    if (m) {
-      const role = m[1];
-      const color = buildColor(role, m[2], m[3]);
-      out.push({ role, colors: [color] });
-    }
-  }
-  return out;
-}
-
 function extractTypography(section) {
   if (!section) return null;
   const text = section.lines.join('\n');
@@ -602,11 +622,19 @@ function parseTypeBullet(bullet) {
   };
 }
 
-function extractElevation(section) {
+function extractGuidance(section) {
   if (!section) return null;
   const subs = splitSubsections(section.lines);
+  return {
+    subtitle: section.subtitle,
+    description: collectParagraphs(subs[0].lines).join(' ') || null,
+    rules: extractNamedRules(section.lines),
+  };
+}
 
-  const description = collectParagraphs(subs[0].lines).join(' ') || null;
+function extractElevation(section) {
+  const guidance = extractGuidance(section);
+  if (!guidance) return null;
 
   const shadows = [];
   const seen = new Set();
@@ -631,12 +659,7 @@ function extractElevation(section) {
     for (const inline of extractInlineShadows(b)) dedupe(inline);
   }
 
-  return {
-    subtitle: section.subtitle,
-    description,
-    shadows,
-    rules: extractNamedRules(section.lines),
-  };
+  return { ...guidance, shadows };
 }
 
 function extractInlineShadows(text) {
@@ -768,6 +791,15 @@ function extractDosDonts(section) {
 
 // ---------- Coverage assessment ----------
 
+// Sections whose model is description-plus-rules only (see extractGuidance).
+const guidanceCoverage = (guidance) =>
+  guidance
+    ? {
+        description: Boolean(guidance.description),
+        rules: guidance.rules.length,
+      }
+    : 'missing';
+
 function assessCoverage(model) {
   const report = {};
 
@@ -796,6 +828,8 @@ function assessCoverage(model) {
       }
     : 'missing';
 
+  report.layout = guidanceCoverage(model.layout);
+
   report.elevation = model.elevation
     ? {
         shadows: model.elevation.shadows.length,
@@ -803,6 +837,8 @@ function assessCoverage(model) {
         description: Boolean(model.elevation.description),
       }
     : 'missing';
+
+  report.shapes = guidanceCoverage(model.shapes);
 
   report.components = model.components
     ? {
@@ -833,7 +869,9 @@ export function parseDesignMd(md) {
     overview: extractOverview(sections['Overview']),
     colors: extractColors(sections['Colors']),
     typography: extractTypography(sections['Typography']),
+    layout: extractGuidance(sections['Layout']),
     elevation: extractElevation(sections['Elevation']),
+    shapes: extractGuidance(sections['Shapes']),
     components: extractComponents(sections['Components']),
     dosDonts: extractDosDonts(sections["Do's and Don'ts"]),
   };

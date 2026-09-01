@@ -3,22 +3,22 @@
     "repo": "alpic-ai/skybridge",
     "path": "skills/skybridge",
     "ref": "main",
-    "commit": "8a90d46eb7f910f4d58c73c1661c737ac8ff0fd9",
-    "fetchedAt": "2026-07-30T15:54:23.216Z"
+    "commit": "1e7aae5b53fe9785da8aac3a6367220672681f5c",
+    "fetchedAt": "2026-09-01T18:38:40.321Z"
   },
   "prisma-cli": {
     "repo": "prisma/skills",
     "path": "prisma-cli",
     "ref": "main",
-    "commit": "32465eafa1c21d98fa9f5da4d2e8051513dbe7ae",
-    "fetchedAt": "2026-06-10T21:25:28.624Z"
+    "commit": "808913c1dac11dc425631c2454f7fcb2d5ade5ca",
+    "fetchedAt": "2026-09-01T18:38:32.155Z"
   },
   "prisma-client-api": {
     "repo": "prisma/skills",
     "path": "prisma-client-api",
     "ref": "main",
-    "commit": "720cdad61c0f799d63f6d8a1ff653131602bd74f",
-    "fetchedAt": "2026-06-10T21:25:28.916Z"
+    "commit": "808913c1dac11dc425631c2454f7fcb2d5ade5ca",
+    "fetchedAt": "2026-09-01T18:38:34.600Z"
   },
   "vercel-react-best-practices": {
     "repo": "vercel-labs/agent-skills",
@@ -46,8 +46,8 @@
     "repo": "vercel-labs/agent-browser",
     "path": "skills/agent-browser",
     "ref": "main",
-    "commit": "ad97a049231322a6583cbee311958a8999b3f34f",
-    "fetchedAt": "2026-07-30T15:53:50.953Z"
+    "commit": "021d9255e543d2f1ab66b87f338d85c3d7a910be",
+    "fetchedAt": "2026-09-01T18:38:21.142Z"
   },
   "skill-creator": {
     "repo": "anthropics/skills",
@@ -60,22 +60,22 @@
     "repo": "pbakaus/impeccable",
     "path": ".pi/skills/impeccable",
     "ref": "main",
-    "commit": "6b342244e915d64b0d6e84d5eec448fd196ce6bb",
-    "fetchedAt": "2026-07-30T15:54:06.850Z"
+    "commit": "94b7f34f6e27b95bc32d8284a671601ed6ac1b2a",
+    "fetchedAt": "2026-09-01T18:38:27.056Z"
   },
   "langfuse": {
     "repo": "langfuse/skills",
     "path": "skills/langfuse",
     "ref": "main",
-    "commit": "e69bb9a1ae62fdbae6ea755a3132fad5b8baa42b",
-    "fetchedAt": "2026-07-30T15:54:09.513Z"
+    "commit": "4a77f3a0c1a15c6e1e62d0e060e0eabe74ad5bda",
+    "fetchedAt": "2026-09-01T18:38:29.859Z"
   },
   "shadcn": {
     "repo": "shadcn-ui/ui",
     "path": "skills/shadcn",
     "ref": "main",
-    "commit": "6cd3f4c65c361ab6554e06a77e6a0af9cf8b6e37",
-    "fetchedAt": "2026-07-30T15:54:20.392Z"
+    "commit": "503a3a57aec9a3817e37f90aa0817b1fabd284d0",
+    "fetchedAt": "2026-09-01T18:38:37.266Z"
   },
   "improve": {
     "repo": "shadcn/improve",
@@ -88,23 +88,22 @@
     "repo": "blader/humanizer",
     "path": "",
     "ref": "main",
-    "curated": true,
-    "commit": "9600f2b7241cb4eed6ad803abee5ea01d67fe8e4",
-    "fetchedAt": "2026-06-23T16:25:46.439Z"
+    "commit": "e2e92e7b4b8229253ed5c8e81dc65463fdeddda5",
+    "fetchedAt": "2026-09-01T18:43:37.912Z"
   },
   "hono": {
-    "repo": "yusukebe/hono-skill",
+    "repo": "honojs/skills",
     "path": "skills/hono",
     "ref": "main",
-    "commit": "0d2e8dc6fa7e9c6e1c872abdb65db422e95e9de0",
-    "fetchedAt": "2026-07-18T17:58:44.000Z"
+    "commit": "f09ea3c64255a7a21cbde226ee6d8312fc3c5f6d",
+    "fetchedAt": "2026-09-01T18:43:35.802Z"
   },
   "supabase": {
     "repo": "supabase/agent-skills",
     "path": "skills/supabase",
     "ref": "main",
-    "commit": "1bf0c4c3a900b4e0b72a6fcd169d626de6a923c1",
-    "fetchedAt": "2026-07-30T15:54:26.375Z"
+    "commit": "8331f910845103c08d51f6ca1d86ebb7d1f745e3",
+    "fetchedAt": "2026-09-01T18:38:42.644Z"
   },
   "supabase-postgres-best-practices": {
     "repo": "supabase/agent-skills",
