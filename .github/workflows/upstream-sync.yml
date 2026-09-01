@@ -1,0 +1,51 @@
+name: upstream-sync
+
+# Weekly sync of vendored agent skills in template/.agents with their upstream
+# repos (tracked in template/.agents/upstreams.json). Opens a PR when anything
+# changed; curated skills are skipped by `upstream pull` and reported only.
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm build
+
+      # Running from the source checkout makes the bundled catalog writable.
+      - name: Pull upstream skills
+        run: node dist/cli.js upstream pull
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          branch: chore/upstream-skills-sync
+          commit-message: "chore(skills): sync upstream agent skills"
+          title: "chore(skills): sync upstream agent skills"
+          body: |
+            Automated weekly pull of upstream agent skills into
+            `template/.agents` (see `upstreams.json` for tracked origins).
+
+            Curated skills are not pulled automatically — check the
+            `upstream` report locally if this PR seems incomplete.
+          add-paths: template/.agents
+          delete-branch: true
