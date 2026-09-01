@@ -1,11 +1,11 @@
 name: upstream-sync
 
-# Weekly sync of vendored agent skills in template/.agents with their upstream
+# Daily sync of vendored agent skills in template/.agents with their upstream
 # repos (tracked in template/.agents/upstreams.json). Opens a PR when anything
 # changed; curated skills are skipped by `upstream pull` and reported only.
 on:
   schedule:
-    - cron: "0 6 * * 1"
+    - cron: "0 6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
           commit-message: "chore(skills): sync upstream agent skills"
           title: "chore(skills): sync upstream agent skills"
           body: |
-            Automated weekly pull of upstream agent skills into
+            Automated daily pull of upstream agent skills into
             `template/.agents` (see `upstreams.json` for tracked origins).
 
             Curated skills are not pulled automatically — check the
