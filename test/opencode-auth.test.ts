@@ -63,7 +63,7 @@ describe("findOpencodeToken", () => {
     });
   });
 
-  it("falls back to matching by server name", () => {
+  it("returns none when the named entry has a different server URL", () => {
     writeAuthFile({
       linear: {
         serverUrl: "https://different.example.com/mcp",
@@ -71,8 +71,30 @@ describe("findOpencodeToken", () => {
       },
     });
     expect(findOpencodeToken("linear", "https://mcp.linear.app/mcp")).toEqual({
+      status: "none",
+    });
+  });
+
+  it("falls back to matching legacy entries by server name", () => {
+    writeAuthFile({
+      linear: {
+        tokens: { accessToken: "tok-legacy", expiresAt: FUTURE_S },
+      },
+    });
+    expect(findOpencodeToken("linear", "https://mcp.linear.app/mcp")).toEqual({
       status: "ok",
-      accessToken: "tok-3",
+      accessToken: "tok-legacy",
+    });
+  });
+
+  it("reports expired tokens from legacy name fallback", () => {
+    writeAuthFile({
+      linear: {
+        tokens: { accessToken: "tok-legacy-expired", expiresAt: PAST_S },
+      },
+    });
+    expect(findOpencodeToken("linear", "https://mcp.linear.app/mcp")).toEqual({
+      status: "expired",
     });
   });
 

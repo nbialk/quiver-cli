@@ -30,7 +30,8 @@ const normalizeUrl = (url: string): string =>
   url.trim().replace(/\/+$/, "").toLowerCase();
 
 // Look up an access token for the given server, matching by URL first (the
-// stable identifier) and falling back to the opencode server name.
+// stable identifier) and falling back to the opencode server name only for
+// legacy entries without a URL.
 export const findOpencodeToken = (
   name: string,
   url: string,
@@ -45,10 +46,11 @@ export const findOpencodeToken = (
 
   const entries = data as Record<string, OpencodeAuthEntry | undefined>;
   const target = normalizeUrl(url);
+  const namedEntry = entries[name];
   const entry =
     Object.values(entries).find(
       (e) => e?.serverUrl && normalizeUrl(e.serverUrl) === target,
-    ) ?? entries[name];
+    ) ?? (namedEntry?.serverUrl === undefined ? namedEntry : undefined);
 
   const tokens = entry?.tokens;
   if (!tokens?.accessToken) return { status: "none" };
