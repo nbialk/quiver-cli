@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.3.2](https://github.com/nbialk/quiver-cli/compare/v1.3.1...v1.3.2) (2026-09-03)
+
+
+### Bug Fixes
+
+* **auth:** avoid mismatched OpenCode tokens ([f87324f](https://github.com/nbialk/quiver-cli/commit/f87324f6b6c43fc9b5ab0c0717a61027dbc4b74e))
+* **catalog:** safeguard artifact materialization ([52c2463](https://github.com/nbialk/quiver-cli/commit/52c2463417fc4fdb42d30f0e7ec082599e2354af))
+
 ## [1.3.1](https://github.com/nbialk/quiver-cli/compare/v1.3.0...v1.3.1) (2026-09-01)
 
 
