@@ -6,13 +6,12 @@ import {
   pluginToEntry,
   skillToEntry,
 } from "../catalog/entries.js";
-import { materializeCatalog } from "../catalog/materialize.js";
+import { materializeCatalogEntry } from "../catalog/materialize.js";
 import { loadRepoCatalog } from "../catalog/repo.js";
 import { resolveCatalog } from "../catalog/resolve.js";
 import { readLockfile, writeLockfile } from "../lockfile/io.js";
 import { parseEntryId } from "../lockfile/schema.js";
 import { writeProviders } from "../providers/write.js";
-import type { Selection } from "./select.js";
 import * as ui from "../ui/prompts.js";
 
 export const add = async (options: CliOptions): Promise<void> => {
@@ -86,15 +85,12 @@ export const add = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  // Materialize additively: keep everything already in the lockfile, plus the
-  // new id.
-  const selection = selectionFromLock(lock);
-  if (parsed.type === "skill") selection.skills.push(parsed.name);
-  if (parsed.type === "command") selection.commands.push(parsed.name);
-  if (parsed.type === "mcp") selection.mcp.push(parsed.name);
-  if (parsed.type === "plugin") selection.plugins.push(parsed.name);
-
-  materializeCatalog(options.targetRoot, source, sourceCatalog, selection);
+  materializeCatalogEntry(
+    options.targetRoot,
+    sourceCatalog,
+    parsed.type,
+    parsed.name,
+  );
 
   lock.entries[id] = entry;
   writeLockfile(options.targetRoot, lock);
@@ -102,22 +98,4 @@ export const add = async (options: CliOptions): Promise<void> => {
   const { catalog } = loadRepoCatalog(options.targetRoot, lock.catalog.source);
   writeProviders(options.targetRoot, catalog, lock);
   await ui.success(`Added ${id}.`);
-};
-
-const selectionFromLock = (lock: NonNullable<ReturnType<typeof readLockfile>>): Selection => {
-  const selection: Selection = {
-    skills: [],
-    commands: [],
-    mcp: [],
-    plugins: [],
-  };
-  for (const lid of Object.keys(lock.entries)) {
-    const p = parseEntryId(lid);
-    if (!p) continue;
-    if (p.type === "skill") selection.skills.push(p.name);
-    else if (p.type === "command") selection.commands.push(p.name);
-    else if (p.type === "mcp") selection.mcp.push(p.name);
-    else if (p.type === "plugin") selection.plugins.push(p.name);
-  }
-  return selection;
 };

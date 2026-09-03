@@ -48,6 +48,13 @@ describe("parseGithubSource", () => {
   it("throws on empty ref", () => {
     expect(() => parseGithubSource("github:acme/skills#")).toThrow(/empty #ref/);
   });
+
+  it.each([
+    "github:acme/skills/../../outside",
+    "github:acme/skills/C:\\outside",
+  ])("rejects escaping subpath %s", (source) => {
+    expect(() => parseGithubSource(source)).toThrow(/Remote catalog subpath/);
+  });
 });
 
 describe("catalog cache", () => {

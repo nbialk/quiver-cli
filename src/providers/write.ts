@@ -38,6 +38,7 @@ const buildPlan = (
   onMissingEnv: (name: string) => void,
   onSkippedRootFile?: (name: string) => void,
 ): {
+  targetRoot: string;
   files: FileOutput[];
   removeFiles: string[];
   removeDirs: string[];
@@ -116,6 +117,7 @@ const buildPlan = (
   }
 
   return {
+    targetRoot,
     files: plans.flatMap((p) => p.files),
     removeFiles: [...plans.flatMap((p) => p.removeFiles), ...removedOutputs],
     removeDirs,

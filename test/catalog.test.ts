@@ -73,4 +73,40 @@ describe("loadCatalog", () => {
       },
     ]);
   });
+
+  it.each(["../outside.ts", "/tmp/outside.ts", "C:\\outside.ts"])(
+    "rejects plugin source path %s",
+    (sourcePath) => {
+      catalogDir = mkdtempSync(join(tmpdir(), "quiver-catalog-"));
+      writeFileSync(
+        join(catalogDir, "config.json"),
+        JSON.stringify({
+          plugins: { unsafe: { provider: "opencode", sourcePath } },
+        }),
+      );
+
+      expect(() =>
+        loadCatalog({ source: "local:test", root: catalogDir! }),
+      ).toThrow(/sourcePath.*(beneath|escapes)/);
+    },
+  );
+
+  it.each(["../unsafe", "/unsafe", "dir\\unsafe"])(
+    "rejects plugin name %s",
+    (name) => {
+      catalogDir = mkdtempSync(join(tmpdir(), "quiver-catalog-"));
+      writeFileSync(
+        join(catalogDir, "config.json"),
+        JSON.stringify({
+          plugins: {
+            [name]: { provider: "opencode", sourcePath: "plugin.ts" },
+          },
+        }),
+      );
+
+      expect(() =>
+        loadCatalog({ source: "local:test", root: catalogDir! }),
+      ).toThrow(/Invalid plugin name/);
+    },
+  );
 });

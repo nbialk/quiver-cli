@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { relative, resolve, win32 } from "node:path";
 
+import { resolveContainedPath } from "../path.js";
 import { fileDigest, jsonDigest, treeDigest } from "./digest.js";
 import { readFrontmatter } from "./frontmatter.js";
 import type { ResolvedCatalog } from "./resolve.js";
@@ -86,6 +87,19 @@ const readConfig = (root: string): { config: CatalogConfig; path: string } => {
   return { config: JSON.parse(readFileSync(path, "utf8")) as CatalogConfig, path };
 };
 
+const assertSafeEntryName = (name: string, type: string): void => {
+  if (
+    !name ||
+    name === "." ||
+    name === ".." ||
+    name.includes("/") ||
+    name.includes("\\") ||
+    win32.isAbsolute(name)
+  ) {
+    throw new Error(`Invalid ${type} name "${name}": names must be a single path segment.`);
+  }
+};
+
 // Recursively find every directory containing a SKILL.md. Top-level skills are
 // grouped as "general"; nested skills use their immediate parent folder name.
 const discoverSkills = (root: string): CatalogSkill[] => {
@@ -123,6 +137,7 @@ const discoverSkills = (root: string): CatalogSkill[] => {
   // Guard against two skills resolving to the same flat shim name.
   const seen = new Map<string, string>();
   for (const skill of found) {
+    assertSafeEntryName(skill.name, "skill");
     const prev = seen.get(skill.name);
     if (prev && prev !== skill.absDir) {
       throw new Error(
@@ -143,8 +158,10 @@ const discoverCommands = (root: string): CatalogCommand[] => {
     .sort((a, b) => a.localeCompare(b))
     .map((file) => {
       const absPath = resolve(commandsRoot, file);
+      const name = file.replace(/\.md$/, "");
+      assertSafeEntryName(name, "command");
       return {
-        name: file.replace(/\.md$/, ""),
+        name,
         sourcePath: relative(root, absPath),
         absPath,
         digest: fileDigest(absPath),
@@ -167,7 +184,12 @@ const discoverPlugins = (root: string, config: CatalogConfig): CatalogPlugin[] =
   Object.entries(config.plugins ?? {})
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, plugin]) => {
-      const absPath = resolve(root, plugin.sourcePath);
+      assertSafeEntryName(name, "plugin");
+      const absPath = resolveContainedPath(
+        root,
+        plugin.sourcePath,
+        `Plugin "${name}" sourcePath`,
+      );
       if (!existsSync(absPath)) {
         throw new Error(`Plugin "${name}" source not found: ${absPath}`);
       }

@@ -13,6 +13,8 @@ import {
 } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 
+import { assertSafeMutationPath } from "../path.js";
+
 export interface FileOutput {
   path: string;
   content: string;
@@ -58,12 +60,14 @@ export interface ApplyResult {
 
 // Apply file outputs, symlinks, removals and stale cleanup. Returns what changed.
 export const applyOutputs = ({
+  targetRoot,
   files,
   symlinks,
   removeFiles,
   removeDirs = [],
   managedDirs,
 }: {
+  targetRoot: string;
   files: FileOutput[];
   symlinks: SymlinkOutput[];
   removeFiles: string[];
@@ -71,6 +75,33 @@ export const applyOutputs = ({
   removeDirs?: string[];
   managedDirs: ManagedDir[];
 }): ApplyResult => {
+  for (const out of files) {
+    assertSafeMutationPath(targetRoot, out.path, "Generated file");
+  }
+  for (const path of removeFiles) {
+    assertSafeMutationPath(targetRoot, path, "Generated file removal", true);
+  }
+  for (const path of removeDirs) {
+    assertSafeMutationPath(
+      targetRoot,
+      path,
+      "Generated directory removal",
+      true,
+    );
+  }
+  for (const link of symlinks) {
+    assertSafeMutationPath(targetRoot, link.path, "Generated symlink", true);
+    assertSafeMutationPath(
+      targetRoot,
+      link.target,
+      "Generated symlink target",
+      true,
+    );
+  }
+  for (const dir of managedDirs) {
+    assertSafeMutationPath(targetRoot, dir.path, "Managed directory");
+  }
+
   const result: ApplyResult = { generated: [], linked: [], removed: [] };
 
   for (const out of files) {

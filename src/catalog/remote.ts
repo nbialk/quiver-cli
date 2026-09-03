@@ -7,6 +7,7 @@ import {
   fetchDefaultBranch,
   resolveCommitSha,
 } from "../github/api.js";
+import { resolveContainedPath } from "../path.js";
 import type { ResolvedCatalog } from "./resolve.js";
 
 // A parsed "github:owner/repo[/path][#ref]" catalog source.
@@ -34,7 +35,9 @@ export const parseGithubSource = (source: string): GithubSpec => {
   if (ref !== null && !ref) {
     throw new Error(`Invalid catalog source "${source}": empty #ref.`);
   }
-  return { repo: `${owner}/${repo}`, path: pathParts.join("/"), ref };
+  const path = pathParts.join("/");
+  if (path) resolveContainedPath("/catalog", path, "Remote catalog subpath");
+  return { repo: `${owner}/${repo}`, path, ref };
 };
 
 // Cache root: $XDG_CACHE_HOME/quiver/catalogs, falling back to
@@ -98,7 +101,9 @@ export const fetchRemoteCatalog = async (
     }
   }
 
-  const root = spec.path ? resolve(cacheDir, spec.path) : cacheDir;
+  const root = spec.path
+    ? resolveContainedPath(cacheDir, spec.path, "Remote catalog subpath")
+    : cacheDir;
   if (!existsSync(root)) {
     throw new Error(
       `Catalog path "${spec.path}" not found in ${spec.repo}@${sha.slice(0, 12)}.`,
