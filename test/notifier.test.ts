@@ -74,9 +74,9 @@ describe("checkForUpdate", () => {
   });
 
   it("forces a network check even with a fresh cache", async () => {
-    mockFetch("99.0.0");
-    await checkForUpdate();
     const fetchSpy = mockFetch("99.0.0");
+    await checkForUpdate();
+    fetchSpy.mockClear();
     await checkForUpdate({ force: true });
     expect(fetchSpy).toHaveBeenCalledTimes(1);
   });
