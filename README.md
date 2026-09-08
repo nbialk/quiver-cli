@@ -14,6 +14,17 @@ CLI remains 1.3.1 until the V2 release; use a source build to try these contract
 - Catalog content lives in [quiver-catalog](https://github.com/nbialk/quiver-catalog),
   not in the CLI package.
 
+## Why V2?
+
+In V1, "up to date" meant matching the configured catalog. With the default
+bundled catalog, external skill updates depended on a catalog import and a new
+CLI release. V2 removes that bottleneck: external skills track their original
+repositories, while custom and curated content stays in a separate catalog.
+Each installation keeps its own source revision; updates remain explicit.
+
+Read the [V2 guide](https://github.com/nbialk/quiver-cli/blob/main/docs/v2.md)
+for the motivation, release highlights, breaking changes and upgrade walkthrough.
+
 ## Quick Start
 
 Requires **Node >= 20.12.0**. From the target repository, choose one setup:
@@ -146,6 +157,10 @@ retained under `.quiver-stage-*`; review the reported location before cleanup.
 Provider generation is separate: repair derived output with `quiver-cli sync`.
 
 ## Migrating From V1
+
+**Migration does not automatically connect old entries to upstream sources.**
+Follow the [V2 upgrade walkthrough](https://github.com/nbialk/quiver-cli/blob/main/docs/v2.md#upgrading-an-existing-project)
+to migrate metadata first and then review source assignments separately.
 
 V1 projects can still `list`, `sync` and `check` their local installation without
 fetching the former bundled catalog. Mutations of the lockfile require migration:
