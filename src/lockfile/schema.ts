@@ -1,5 +1,6 @@
-export const LOCKFILE_VERSION = 1 as const;
+export const LOCKFILE_VERSION = 2 as const;
 export const LOCKFILE_NAME = "quiver.lock";
+export type LockfileVersion = 1 | typeof LOCKFILE_VERSION;
 
 export type EntryType = "skill" | "command" | "mcp" | "plugin";
 
@@ -10,7 +11,7 @@ export const isProvider = (v: string): v is Provider =>
   (PROVIDERS as readonly string[]).includes(v);
 
 export interface CatalogRef {
-  /** e.g. "local:template/.agents" now, "github:owner/repo" later. */
+  /** Discovery catalog only; installed entries carry their own provenance. */
   source: string;
   /** Branch/tag for remote catalogs; null for local. */
   ref: string | null;
@@ -19,13 +20,46 @@ export interface CatalogRef {
   fetchedAt: string;
 }
 
+export interface GithubEntrySource {
+  kind: "github";
+  repo: string;
+  path: string;
+  /** null tracks the default branch; a full commit SHA is immutable. */
+  ref: string | null;
+  commit: string;
+  /** Source baseline, independent of locally accepted changes. */
+  digest: string;
+}
+
+export interface LocalEntrySource {
+  kind: "local";
+  /** Absolute root of an explicitly selected writable local source. */
+  root: string;
+  /** Relative to root; empty when root is the entry itself. */
+  path: string;
+  digest: string;
+}
+
+export interface LegacyEntrySource {
+  kind: "legacy";
+  /** Unverified V1 provenance; never inferred from current catalog content. */
+  catalog: CatalogRef;
+  sourcePath?: string;
+  pin?: string | null;
+}
+
+export type EntrySource =
+  | GithubEntrySource
+  | LocalEntrySource
+  | LegacyEntrySource;
+
 export interface SkillEntry {
   type: "skill";
-  sourcePath: string;
-  /** sha256 of the whole skill directory tree. */
+  /** Path relative to the installed .agents root. */
+  installedPath: string;
+  source: EntrySource;
+  /** Accepted local sha256 of the whole skill directory tree. */
   digest: string;
-  /** null = follow catalog HEAD; "tag:v1" / "sha:abc" once remote pinning lands. */
-  pin: string | null;
   frontmatter: {
     name: string | null;
     description: string | null;
@@ -35,7 +69,8 @@ export interface SkillEntry {
 
 export interface CommandEntry {
   type: "command";
-  sourcePath: string;
+  installedPath: string;
+  source: EntrySource;
   digest: string;
 }
 
@@ -50,8 +85,9 @@ export interface McpToolSnapshot {
 
 export interface McpEntry {
   type: "mcp";
+  source: EntrySource;
   transport: "http" | "stdio";
-  /** sha256 of the server definition in config.json. */
+  /** Accepted local sha256 of the server definition in config.json. */
   configDigest: string;
   /** tools/list snapshot, keyed by tool name; null until introspected. */
   tools: Record<string, McpToolSnapshot> | null;
@@ -63,7 +99,8 @@ export interface McpEntry {
 export interface PluginEntry {
   type: "plugin";
   provider: "opencode";
-  sourcePath: string;
+  installedPath: string;
+  source: EntrySource;
   digest: string;
   requires: string[];
 }
@@ -71,7 +108,8 @@ export interface PluginEntry {
 export type LockEntry = SkillEntry | CommandEntry | McpEntry | PluginEntry;
 
 export interface Lockfile {
-  version: typeof LOCKFILE_VERSION;
+  /** V1 entries are normalized in memory but must be explicitly migrated. */
+  version: LockfileVersion;
   catalog: CatalogRef;
   /** Tools to generate configs for; null/absent = all (backwards compatible). */
   providers?: Provider[] | null;
@@ -96,6 +134,13 @@ export const parseEntryId = (
   ) {
     return null;
   }
-  if (!name) return null;
+  if (
+    !name.trim() ||
+    /[<>:"/\\|?*\u0000-\u001f\u007f]/.test(name) ||
+    /[. ]$/.test(name) ||
+    ["__proto__", "constructor", "prototype"].includes(name)
+  ) {
+    return null;
+  }
   return { type, name };
 };

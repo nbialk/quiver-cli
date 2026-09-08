@@ -1,14 +1,19 @@
 import type { CliOptions } from "../cli.js";
-import { loadRepoCatalog, repoCatalogExists } from "../catalog/repo.js";
-import { readLockfile, writeLockfile } from "../lockfile/io.js";
-import { parseEntryId, PROVIDERS } from "../lockfile/schema.js";
-import { validateProviders } from "../providers/resolve.js";
+import { repoCatalogExists } from "../catalog/repo.js";
+import { readLockfile } from "../lockfile/io.js";
 import { formatWriteResult, writeProviders } from "../providers/write.js";
 import * as ui from "../ui/prompts.js";
 import { ignoredSourcePaths } from "./gitignore.js";
-import { refreshLockDigests } from "./locksync.js";
+import { inspectLocalEntries } from "./locksync.js";
 
 export const sync = async (options: CliOptions): Promise<void> => {
+  if (options.providers) {
+    await ui.error(
+      "sync does not change providers. Use `quiver-cli providers <a,b>` instead, then run `quiver-cli sync`.",
+    );
+    process.exitCode = 1;
+    return;
+  }
   const lock = readLockfile(options.targetRoot);
   if (!lock) {
     await ui.error("No quiver.lock found. Run `quiver-cli init` first.");
@@ -21,56 +26,23 @@ export const sync = async (options: CliOptions): Promise<void> => {
     return;
   }
 
-  // Optional provider change: --providers=a,b updates the lockfile's active
-  // providers before regenerating configs (deselected ones get cleaned up).
-  if (options.providers) {
-    const { providers: valid, invalid } = validateProviders(options.providers);
-    if (invalid) {
-      await ui.error(
-        `Unknown provider(s): ${invalid.join(", ")}. Valid: ${PROVIDERS.join(", ")}.`,
-      );
-      process.exitCode = 1;
-      return;
-    }
-    if (!valid!.length) {
-      await ui.error("At least one provider is required.");
-      process.exitCode = 1;
-      return;
-    }
-    lock.providers = valid!;
-    await ui.step(`Providers set to: ${valid!.join(", ")}`);
-  }
-
-  const { catalog } = loadRepoCatalog(options.targetRoot, lock.catalog.source);
-
-  // Warn about lockfile entries whose source vanished from the repo catalog.
-  const haveSkills = new Set(catalog.skills.map((s) => s.name));
-  const haveCommands = new Set(catalog.commands.map((c) => c.name));
-  const haveMcp = new Set(catalog.mcp.map((m) => m.name));
-  const havePlugins = new Set(catalog.plugins.map((p) => p.name));
-  const orphans: string[] = [];
-  for (const id of Object.keys(lock.entries)) {
-    const p = parseEntryId(id);
-    if (!p) continue;
-    const present =
-      (p.type === "skill" && haveSkills.has(p.name)) ||
-      (p.type === "command" && haveCommands.has(p.name)) ||
-      (p.type === "mcp" && haveMcp.has(p.name)) ||
-      (p.type === "plugin" && havePlugins.has(p.name));
-    if (!present) orphans.push(id);
-  }
-  if (orphans.length) {
+  const { catalog, drift, missing, unsafe } = inspectLocalEntries(options.targetRoot, lock);
+  if (missing.length) {
     await ui.warn(
-      `Lockfile references missing catalog entries: ${orphans.join(", ")}. ` +
+      `Lockfile references missing local entries: ${missing.map((item) => item.id).join(", ")}. ` +
         `Run \`quiver-cli remove <id>\` to drop them.`,
     );
   }
-
-  // Refresh digests/snapshots additively; report drift instead of silently
-  // overwriting the lockfile's recorded state.
-  const drift = refreshLockDigests(catalog, lock);
+  if (unsafe.length) {
+    await ui.error(`Unsafe local entries:\n  - ${unsafe.map((item) => `${item.id}: ${item.reason}`).join("\n  - ")}`);
+    process.exitCode = 1;
+    return;
+  }
   if (drift.length) {
-    await ui.warn(`Catalog drift detected:\n  - ${drift.join("\n  - ")}`);
+    await ui.warn(
+      `Local drift detected:\n  - ${drift.map((item) => `${item.id}: ${item.kind} changed`).join("\n  - ")}\n` +
+        "Baselines were not changed. Use `quiver-cli check <id> --accept` to accept local changes.",
+    );
   }
 
   const ignored = ignoredSourcePaths(options.targetRoot);
@@ -81,7 +53,6 @@ export const sync = async (options: CliOptions): Promise<void> => {
     );
   }
 
-  writeLockfile(options.targetRoot, lock);
   const result = writeProviders(options.targetRoot, catalog, lock);
   await ui.success(
     `Synced: ${result.generated.length} generated, ${result.linked.length} linked, ${result.removed.length} removed`,

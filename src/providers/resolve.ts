@@ -31,24 +31,24 @@ export const sameProviders = (a: Provider[], b: Provider[]): boolean =>
 
 // Resolve target providers for init: --providers= flag wins, then an
 // interactive multiselect (default: all), falling back to all when
-// non-interactive. Returns null when the flag contains invalid values
-// (error already shown).
+// non-interactive. Invalid explicit values are reported by the CLI.
 export const resolveProviders = async (
   options: CliOptions,
-): Promise<Provider[] | null> => {
+): Promise<Provider[]> => {
   if (options.providers) {
     const { providers, invalid } = validateProviders(options.providers);
     if (invalid) {
-      await ui.error(
-        `Unknown provider(s): ${invalid.join(", ")}. Valid: ${PROVIDERS.join(", ")}.`,
+      throw new Error(
+        `Unknown provider(s): ${invalid.map((value) => value || "(empty)").join(", ")}. Valid: ${PROVIDERS.join(", ")}.`,
       );
-      process.exitCode = 1;
-      return null;
     }
-    return providers!;
+    if (!providers?.length) throw new Error("At least one provider is required.");
+    return providers;
   }
 
-  if (options.all || !process.stdin.isTTY) return [...PROVIDERS];
+  if (options.all || options.yes || options.json || options.empty || !process.stdin.isTTY) {
+    return [...PROVIDERS];
+  }
 
   return selectProviders([...PROVIDERS]);
 };
@@ -58,6 +58,7 @@ export const resolveProviders = async (
 export const selectProviders = async (
   initialValues: Provider[],
 ): Promise<Provider[]> => {
+  if (!process.stdin.isTTY) return initialValues;
   const picked = await ui.selectGrouped<Provider>({
     message: "Generate configs for (space toggles, enter confirms)",
     groups: [

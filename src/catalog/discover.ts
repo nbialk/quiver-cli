@@ -21,6 +21,38 @@ export interface StdioServer {
 
 export type McpServer = HttpServer | StdioServer;
 
+export function validateMcpServer(
+  value: unknown,
+  label = "MCP server",
+): asserts value is McpServer {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${label} must be an object`);
+  }
+  const server = value as Record<string, unknown>;
+  if (server.transport !== "http" && server.transport !== "stdio") {
+    throw new Error(`${label}.transport must be "http" or "stdio"`);
+  }
+  const primary = server.transport === "http" ? "url" : "command";
+  if (typeof server[primary] !== "string" || !server[primary].trim()) {
+    throw new Error(`${label}.${primary} must be a nonempty string`);
+  }
+  if (server.args !== undefined &&
+      (!Array.isArray(server.args) || server.args.some((arg) => typeof arg !== "string"))) {
+    throw new Error(`${label}.args must be an array of strings`);
+  }
+  for (const field of ["env", "headers"] as const) {
+    const record = server[field];
+    if (record === undefined) continue;
+    if (
+      record === null || typeof record !== "object" || Array.isArray(record) ||
+      (Object.getPrototypeOf(record) !== Object.prototype && Object.getPrototypeOf(record) !== null) ||
+      Object.values(record).some((item) => typeof item !== "string")
+    ) {
+      throw new Error(`${label}.${field} must be a plain string-valued record`);
+    }
+  }
+}
+
 export interface CatalogConfig {
   shared?: Record<string, unknown>;
   mcpServers?: Record<string, McpServer>;
@@ -118,7 +150,7 @@ const discoverSkills = (root: string): CatalogSkill[] => {
         found.push({
           name: entry.name,
           group: group ?? "general",
-          sourcePath: relative(root, childDir),
+           sourcePath: relative(root, childDir).replaceAll("\\", "/"),
           absDir: childDir,
           digest: treeDigest(childDir),
           frontmatter: {
@@ -162,7 +194,7 @@ const discoverCommands = (root: string): CatalogCommand[] => {
       assertSafeEntryName(name, "command");
       return {
         name,
-        sourcePath: relative(root, absPath),
+        sourcePath: relative(root, absPath).replaceAll("\\", "/"),
         absPath,
         digest: fileDigest(absPath),
       };
@@ -173,11 +205,11 @@ const discoverMcp = (config: CatalogConfig): CatalogMcp[] => {
   const servers = config.mcpServers ?? {};
   return Object.keys(servers)
     .sort((a, b) => a.localeCompare(b))
-    .map((name) => ({
-      name,
-      server: servers[name]!,
-      configDigest: jsonDigest(servers[name]),
-    }));
+    .map((name) => {
+      const server = servers[name];
+      validateMcpServer(server, `MCP server "${name}"`);
+      return { name, server, configDigest: jsonDigest(server) };
+    });
 };
 
 const discoverPlugins = (root: string, config: CatalogConfig): CatalogPlugin[] =>

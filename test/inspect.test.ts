@@ -35,16 +35,16 @@ const setup = (): void => {
         "mcp:context7": {
           type: "mcp",
           transport: "http",
-          configDigest: "x",
+          configDigest: `sha256:${"c".repeat(64)}`,
           tools: {
             "query-docs": {
               description: "Query documentation",
-              inputSchemaHash: "sha256:a",
+              inputSchemaHash: `sha256:${"a".repeat(64)}`,
               tokens: 120,
             },
             "resolve-library-id": {
               description: "Resolve a library id",
-              inputSchemaHash: "sha256:b",
+              inputSchemaHash: `sha256:${"b".repeat(64)}`,
               tokens: 340,
             },
           },
@@ -53,7 +53,7 @@ const setup = (): void => {
         "mcp:linear": {
           type: "mcp",
           transport: "http",
-          configDigest: "x",
+          configDigest: `sha256:${"c".repeat(64)}`,
           tools: null,
           toolsFetchedAt: null,
           authRequired: true,
@@ -110,7 +110,7 @@ describe("inspect", () => {
       name: "resolve-library-id",
       description: "Resolve a library id",
       tokens: 340,
-      inputSchemaHash: "sha256:b",
+      inputSchemaHash: `sha256:${"b".repeat(64)}`,
     });
   });
 

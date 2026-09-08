@@ -15,7 +15,7 @@ const PROVIDER_ENTRIES: Record<Provider, string[]> = {
   opencode: [".opencode/", "opencode.json"],
   codex: [".codex/"],
 };
-const SHARED_ENTRIES = ["AGENTS.md", "CLAUDE.md"];
+const SHARED_ENTRIES = ["/AGENTS.md", "/CLAUDE.md"];
 const SECRET_ENTRIES = [".env.local"];
 const LOCAL_ENTRIES = [".agents/config.local.json"];
 
@@ -85,12 +85,22 @@ export const ensureLocalOverrideIgnored = (targetRoot: string): boolean => {
 // otherwise a fresh clone would miss the catalog and lockfile entirely.
 export const ignoredSourcePaths = (targetRoot: string): string[] => {
   try {
+    const nested = execFileSync(
+      "git",
+      ["ls-files", "--cached", "--others", "-z", "--", ".agents"],
+      { cwd: targetRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+    ).split("\0").filter((path) => path && !LOCAL_ENTRIES.includes(path));
     const out = execFileSync(
       "git",
-      ["check-ignore", ".agents", "quiver.lock"],
-      { cwd: targetRoot, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] },
+      ["check-ignore", "--no-index", "-z", "--stdin"],
+      {
+        cwd: targetRoot,
+        encoding: "utf8",
+        input: [...new Set([".agents", "quiver.lock", ...nested])].join("\0") + "\0",
+        stdio: ["pipe", "pipe", "ignore"],
+      },
     );
-    return out.split("\n").map((l) => l.trim()).filter(Boolean);
+    return out.split("\0").filter(Boolean);
   } catch {
     // Not a git repo, git missing, or nothing ignored (exit 1) - all fine.
     return [];

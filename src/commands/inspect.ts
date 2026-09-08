@@ -138,7 +138,7 @@ export const inspect = async (options: CliOptions): Promise<void> => {
         )}`,
       );
     } else {
-      lines.push(`  ${c.dim("run 'quiver-cli check' to introspect this server")}`);
+      lines.push(`  ${c.dim(`review with 'quiver-cli check mcp:${name}', then record with 'quiver-cli check mcp:${name} --accept'`)}`);
     }
     lines.push("");
     ui.block(lines);
@@ -193,7 +193,7 @@ export const inspect = async (options: CliOptions): Promise<void> => {
   }
   if (missingTokens) {
     lines.push(
-      `  ${c.dim("run 'quiver-cli check' to populate missing token estimates")}`,
+      `  ${c.dim(`run 'quiver-cli check mcp:${name} --accept' to record missing token estimates`)}`,
     );
   }
   lines.push("");

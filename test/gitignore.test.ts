@@ -1,10 +1,12 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { execFileSync, spawnSync } from "node:child_process";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
   ensureLocalOverrideIgnored,
+  ignoredSourcePaths,
   patchGitignore,
 } from "../src/commands/gitignore.js";
 import { collectEnvVars } from "../src/secrets/interpolate.js";
@@ -39,12 +41,12 @@ describe("patchGitignore", () => {
     expect(count(".claude/")).toBe(1);
     expect(count(".env.local")).toBe(1);
     expect(count(".codex/")).toBe(1); // was missing, added once
-    expect(count("AGENTS.md")).toBe(1);
+    expect(count("/AGENTS.md")).toBe(1);
   });
 
   it("is a no-op when everything is present", () => {
     setup(
-      ".claude/\n.opencode/\n.codex/\n.mcp.json\nopencode.json\nAGENTS.md\nCLAUDE.md\n.env.local\n.agents/config.local.json\n",
+      ".claude/\n.opencode/\n.codex/\n.mcp.json\nopencode.json\n/AGENTS.md\n/CLAUDE.md\n.env.local\n.agents/config.local.json\n",
     );
     expect(patchGitignore(dir)).toBe(false);
   });
@@ -56,6 +58,49 @@ describe("patchGitignore", () => {
     expect(patchGitignore(dir)).toBe(true);
     const out = readFileSync(join(dir, ".gitignore"), "utf8");
     expect(out.split("\n").map((l) => l.trim())).toContain(".env.local");
+  });
+
+  it("does not rewrite user-owned unanchored guide rules", () => {
+    const original = "# User rules\nAGENTS.md\nCLAUDE.md\n";
+    setup(original);
+    patchGitignore(dir);
+    const out = readFileSync(join(dir, ".gitignore"), "utf8");
+    expect(out.startsWith(original)).toBe(true);
+    expect(out).toContain("/AGENTS.md\n/CLAUDE.md");
+    expect(patchGitignore(dir)).toBe(false);
+  });
+
+  it("ignores root guides without excluding nested source guides", () => {
+    setup();
+    execFileSync("git", ["init", "--quiet"], { cwd: dir });
+    patchGitignore(dir);
+    mkdirSync(join(dir, ".agents/skills/demo"), { recursive: true });
+    for (const path of ["AGENTS.md", "CLAUDE.md", ".agents/AGENTS.md", ".agents/skills/demo/AGENTS.md", ".agents/skills/demo/CLAUDE.md"]) {
+      writeFileSync(join(dir, path), "guide\n");
+      expect(spawnSync("git", ["check-ignore", "--no-index", path], { cwd: dir }).status).toBe(path.startsWith(".agents/") ? 1 : 0);
+    }
+    expect(ignoredSourcePaths(dir)).toEqual([]);
+  });
+});
+
+describe("ignoredSourcePaths", () => {
+  it("warns about nested ignored files, including already tracked files", () => {
+    setup();
+    execFileSync("git", ["init", "--quiet"], { cwd: dir });
+    mkdirSync(join(dir, ".agents/skills/demo"), { recursive: true });
+    writeFileSync(join(dir, ".agents/AGENTS.md"), "guide\n");
+    execFileSync("git", ["add", ".agents/AGENTS.md"], { cwd: dir });
+    writeFileSync(join(dir, ".agents/skills/demo/AGENTS.md"), "nested guide\n");
+    writeFileSync(join(dir, ".agents/config.local.json"), "{}\n");
+    writeFileSync(join(dir, ".gitignore"), "AGENTS.md\n.agents/config.local.json\n");
+    expect(ignoredSourcePaths(dir).sort()).toEqual([".agents/AGENTS.md", ".agents/skills/demo/AGENTS.md"]);
+  });
+
+  it("still reports ignored source roots and lockfiles", () => {
+    setup(".agents/\nquiver.lock\n");
+    execFileSync("git", ["init", "--quiet"], { cwd: dir });
+    mkdirSync(join(dir, ".agents"));
+    expect(ignoredSourcePaths(dir)).toEqual([".agents", "quiver.lock"]);
   });
 });
 

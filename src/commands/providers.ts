@@ -1,6 +1,6 @@
 import type { CliOptions } from "../cli.js";
 import { loadRepoCatalog, repoCatalogExists } from "../catalog/repo.js";
-import { readLockfile, writeLockfile } from "../lockfile/io.js";
+import { readLockfile, requireV2Lockfile, writeLockfile } from "../lockfile/io.js";
 import { PROVIDERS, type Provider } from "../lockfile/schema.js";
 import {
   sameProviders,
@@ -21,6 +21,7 @@ export const providers = async (options: CliOptions): Promise<void> => {
     process.exitCode = 1;
     return;
   }
+  requireV2Lockfile(lock);
   if (!repoCatalogExists(options.targetRoot)) {
     await ui.error("No .agents/ directory found. Run `quiver-cli init` first.");
     process.exitCode = 1;
@@ -50,7 +51,9 @@ export const providers = async (options: CliOptions): Promise<void> => {
       return;
     }
     next = valid!;
-  } else if (process.stdin.isTTY && !options.all) {
+  } else if (options.yes) {
+    next = current;
+  } else if (process.stdin.isTTY && !options.json) {
     next = await selectProviders(current);
   } else {
     await ui.error(

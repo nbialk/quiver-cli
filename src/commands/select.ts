@@ -5,6 +5,10 @@ import * as ui from "../ui/prompts.js";
 const DEFAULT_SKILLS = ["find-skills", "skill-creator"];
 const DEFAULT_COMMANDS = ["cp", "review"];
 
+export type SelectableCatalog = Pick<Catalog, "commands" | "mcp" | "plugins"> & {
+  skills: Pick<Catalog["skills"][number], "name" | "group" | "frontmatter">[];
+};
+
 export interface Selection {
   skills: string[];
   commands: string[];
@@ -28,7 +32,7 @@ const skillHint = (fm: {
   return parts.join(" · ");
 };
 
-const serverDetail = (catalog: Catalog, name: string): string => {
+const serverDetail = (catalog: SelectableCatalog, name: string): string => {
   const entry = catalog.mcp.find((m) => m.name === name);
   if (!entry) return "";
   const s = entry.server;
@@ -39,7 +43,7 @@ const serverDetail = (catalog: Catalog, name: string): string => {
 
 // Interactive (or all-on) selection across the three artifact kinds.
 export const selectFromCatalog = async (
-  catalog: Catalog,
+  catalog: SelectableCatalog,
   {
     interactive,
     providers,
@@ -53,13 +57,16 @@ export const selectFromCatalog = async (
   );
   const allPlugins = availablePlugins.map((p) => p.name);
 
-  if (!interactive || !process.stdin.isTTY) {
+  if (!interactive) {
     return {
       skills: allSkills,
       commands: allCommands,
       mcp: allMcp,
       plugins: allPlugins,
     };
+  }
+  if (!process.stdin.isTTY) {
+    throw new Error("Selection requires an interactive terminal. Use --all to explicitly select everything.");
   }
 
   // Skills, grouped (general first, defaults surfaced).

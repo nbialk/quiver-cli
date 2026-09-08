@@ -4,6 +4,7 @@ import { readLockfile } from "../lockfile/io.js";
 import {
   parseEntryId,
   type CommandEntry,
+  type EntrySource,
   type McpEntry,
   type PluginEntry,
   type SkillEntry,
@@ -23,14 +24,30 @@ const truncate = (s: string, max: number): string => {
 const padCell = (text: string, width: number, color: (s: string) => string): string =>
   color(text.padEnd(width));
 
+const origin = (source: EntrySource): string => {
+  if (source.kind === "github") {
+    return `github:${source.repo}${source.path ? `/${source.path}` : ""}#${source.ref ?? "default"} @ ${source.commit.slice(0, 12)}`;
+  }
+  if (source.kind === "local") {
+    return `local: ${source.root}${source.path ? `/${source.path}` : ""}`;
+  }
+  return `legacy (unverified): ${source.catalog.source}` +
+    (source.sourcePath ? `, path ${source.sourcePath}` : "") +
+    (source.catalog.ref ? `, ref ${source.catalog.ref}` : "") +
+    (source.catalog.resolved ? ` @ ${source.catalog.resolved.slice(0, 12)}` : "");
+};
+
 // Show what is installed according to quiver.lock, including MCP tool counts
 // from the recorded snapshots.
 export const list = async (options: CliOptions): Promise<void> => {
   const lock = readLockfile(options.targetRoot);
   if (!lock) {
-    if (options.json) console.log(JSON.stringify({ ok: false, error: "no-lockfile" }));
+    if (options.json) console.log(JSON.stringify({
+      ok: false,
+      error: { code: "no-lockfile", message: "No quiver.lock found. Run `quiver-cli init` first." },
+    }));
     else await ui.error("No quiver.lock found. Run `quiver-cli init` first.");
-    process.exitCode = 1;
+    process.exitCode = 2;
     return;
   }
 
@@ -73,12 +90,14 @@ export const list = async (options: CliOptions): Promise<void> => {
           ok: true,
           skills: skills.map(({ name, entry }) => ({
             name,
+            source: entry.source,
             version: entry.frontmatter.version,
             description: entry.frontmatter.description,
           })),
-          commands: commands.map(({ name }) => ({ name })),
+          commands: commands.map(({ name, entry }) => ({ name, source: entry.source })),
           mcp: mcp.map(({ name, entry }) => ({
             name,
+            source: entry.source,
             transport: entry.transport,
             enabled: !disabled.has(name),
             detail: serverDetail.get(name) ?? null,
@@ -88,6 +107,7 @@ export const list = async (options: CliOptions): Promise<void> => {
           })),
           plugins: plugins.map(({ name, entry }) => ({
             name,
+            source: entry.source,
             provider: entry.provider,
             requires: entry.requires,
           })),
@@ -122,13 +142,15 @@ export const list = async (options: CliOptions): Promise<void> => {
         ? c.dim(truncate(entry.frontmatter.description, descMax))
         : "";
       lines.push(`    ${name.padEnd(nameW)} ${ver} ${desc}`.trimEnd());
+      lines.push(`      ${c.dim(origin(entry.source))}`);
     }
   }
 
   if (commands.length) {
     lines.push("", `  ${c.bold("commands")}`);
-    for (const { name } of commands) {
+    for (const { name, entry } of commands) {
       lines.push(`    /${name}`);
+      lines.push(`      ${c.dim(origin(entry.source))}`);
     }
   }
 
@@ -175,6 +197,7 @@ export const list = async (options: CliOptions): Promise<void> => {
           (detail ? `  ${c.dim(detail)}` : "") +
           off,
       );
+      lines.push(`      ${c.dim(origin(entry.source))}`);
     }
   }
 
@@ -186,6 +209,7 @@ export const list = async (options: CliOptions): Promise<void> => {
         ? `  ${c.dim(`requires: ${entry.requires.join(", ")}`)}`
         : "";
       lines.push(`    ${name} ${c.dim(entry.provider)}${requires}`);
+      lines.push(`      ${c.dim(origin(entry.source))}`);
     }
   }
 
@@ -207,7 +231,7 @@ export const list = async (options: CliOptions): Promise<void> => {
   }
   if (missingTools) {
     lines.push(
-      `  ${c.dim("run 'quiver-cli check' to populate tool counts and token estimates")}`,
+      `  ${c.dim("review with 'quiver-cli check', then record snapshots with 'quiver-cli check mcp:<name> --accept'")}`,
     );
   }
   lines.push("");

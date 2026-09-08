@@ -1,5 +1,6 @@
 import type {
   CommandEntry,
+  EntrySource,
   McpEntry,
   PluginEntry,
   SkillEntry,
@@ -11,33 +12,45 @@ import type {
   CatalogSkill,
 } from "./discover.js";
 
-export const skillToEntry = (skill: CatalogSkill): SkillEntry => ({
+export const skillToEntry = (
+  skill: CatalogSkill,
+  source: EntrySource,
+): SkillEntry => ({
   type: "skill",
-  sourcePath: skill.sourcePath,
+  installedPath: skill.sourcePath,
+  source,
   digest: skill.digest,
-  pin: null,
   frontmatter: skill.frontmatter,
 });
 
-export const commandToEntry = (command: CatalogCommand): CommandEntry => ({
+export const commandToEntry = (
+  command: CatalogCommand,
+  source: EntrySource,
+): CommandEntry => ({
   type: "command",
-  sourcePath: command.sourcePath,
+  installedPath: command.sourcePath,
+  source,
   digest: command.digest,
 });
 
 // MCP tool snapshot is filled in lazily by introspection (phase 4).
-export const mcpToEntry = (mcp: CatalogMcp): McpEntry => ({
+export const mcpToEntry = (mcp: CatalogMcp, source: EntrySource): McpEntry => ({
   type: "mcp",
+  source,
   transport: mcp.server.transport,
   configDigest: mcp.configDigest,
   tools: null,
   toolsFetchedAt: null,
 });
 
-export const pluginToEntry = (plugin: CatalogPlugin): PluginEntry => ({
+export const pluginToEntry = (
+  plugin: CatalogPlugin,
+  source: EntrySource,
+): PluginEntry => ({
   type: "plugin",
   provider: plugin.provider,
-  sourcePath: plugin.sourcePath,
+  installedPath: plugin.sourcePath,
+  source,
   digest: plugin.digest,
   requires: plugin.requires,
 });

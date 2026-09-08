@@ -1,258 +1,126 @@
-import { cpSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-
 import type { CliOptions } from "../cli.js";
-import { loadCatalog, type Catalog } from "../catalog/discover.js";
-import { loadRepoCatalog, repoCatalogExists } from "../catalog/repo.js";
-import { resolveCatalog } from "../catalog/resolve.js";
-import { readLockfile, writeLockfile } from "../lockfile/io.js";
-import {
-  parseEntryId,
-  type CommandEntry,
-  type Lockfile,
-  type McpEntry,
-  type PluginEntry,
-  type SkillEntry,
-} from "../lockfile/schema.js";
+import { resolveInstalledId } from "../cli.js";
+import { jsonDigest } from "../catalog/digest.js";
+import { repoCatalogExists } from "../catalog/repo.js";
+import { readLockfile, requireV2Lockfile } from "../lockfile/io.js";
+import type { EntrySource } from "../lockfile/schema.js";
 import { writeProviders } from "../providers/write.js";
+import { prepareEntryUpdate, type PreparedEntry } from "../sources/entry.js";
 import * as ui from "../ui/prompts.js";
+import { installedDigest, installPreparedEntry } from "./install.js";
+import { inspectLocalEntries } from "./locksync.js";
 
-type UpdateStatus =
-  | "updated"
-  | "up-to-date"
-  | "local-changes"
-  | "not-in-catalog";
-
+type UpdateStatus = "updated" | "up-to-date" | "pinned" | "local-changes" | "legacy" | "error";
 interface UpdateReport {
   id: string;
   status: UpdateStatus;
+  reason?: string;
+  from: EntrySource;
+  to?: EntrySource;
+  contentChanged?: boolean;
 }
 
-// Pull newer catalog content into the repo's .agents/ for locked entries.
-// Local modifications (repo digest != lock digest) are never overwritten
-// unless --force is given. Targeted per entry: other artifacts are untouched.
+const sourceIdentity = (source: EntrySource): string => {
+  if (source.kind === "legacy") return jsonDigest(source);
+  const { digest: _digest, ...identity } = source;
+  if ("commit" in identity) delete (identity as { commit?: string }).commit;
+  return jsonDigest(identity);
+};
+
 export const update = async (options: CliOptions): Promise<void> => {
   const lock = readLockfile(options.targetRoot);
-  if (!lock) {
-    await ui.error("No quiver.lock found. Run `quiver-cli init` first.");
-    process.exitCode = 1;
-    return;
+  if (!lock) throw new Error("No quiver.lock found. Run `quiver-cli init` first.");
+  requireV2Lockfile(lock);
+  if (!repoCatalogExists(options.targetRoot)) throw new Error("No .agents/ directory found.");
+  if (options.positionals.length > 1 || (options.source && !options.positionals.length)) {
+    throw new Error("Usage: quiver-cli update [id] [--source=github:owner/repo/path].");
   }
-  if (!repoCatalogExists(options.targetRoot)) {
-    await ui.error("No .agents/ directory found. Run `quiver-cli init` first.");
-    process.exitCode = 1;
-    return;
-  }
-
-  const onlyId = options.positionals[0];
-  if (onlyId && !lock.entries[onlyId]) {
-    await ui.error(`${onlyId} is not installed (not found in quiver.lock).`);
-    process.exitCode = 1;
-    return;
-  }
-
-  // Re-resolve the catalog ref (remote: branch/tag HEAD -> new SHA) so update
-  // pulls the latest published content; the lockfile pin moves with it.
-  const source = await resolveCatalog(lock.catalog.source);
-  const sourceCatalog = loadCatalog(source);
-  const catalogMoved =
-    source.resolved != null && source.resolved !== lock.catalog.resolved;
-  if (catalogMoved) {
-    lock.catalog.ref = source.ref ?? lock.catalog.ref;
-    lock.catalog.resolved = source.resolved ?? null;
-    lock.catalog.fetchedAt = source.fetchedAt ?? new Date().toISOString();
-  }
-  const { catalog: repoCatalog } = loadRepoCatalog(
-    options.targetRoot,
-    lock.catalog.source,
-  );
-
-  const ids = onlyId ? [onlyId] : Object.keys(lock.entries).sort();
+  const ids = options.positionals[0]
+    ? [resolveInstalledId(options.positionals[0], lock)] : Object.keys(lock.entries).sort();
   const reports: UpdateReport[] = [];
-  let changed = false;
+  const pending: { prepared: PreparedEntry; digest: string; report: UpdateReport }[] = [];
 
   for (const id of ids) {
-    const parsed = parseEntryId(id);
-    const entry = lock.entries[id];
-    if (!parsed || !entry) continue;
-    const report = applyUpdate(
-      options.targetRoot,
-      parsed,
-      entry,
-      sourceCatalog,
-      repoCatalog,
-      lock,
-      options.force,
-      options.dryRun,
-    );
-    if (report.status === "updated") changed = true;
+    const entry = lock.entries[id]!;
+    const report: UpdateReport = { id, status: "up-to-date", from: entry.source };
     reports.push(report);
+    try {
+      const local = installedDigest(options.targetRoot, id, entry, lock);
+      if (entry.source.kind === "legacy" && !options.source) {
+        report.status = "legacy";
+        report.reason = "Unverified V1 source. Select an explicit --source before updating.";
+        continue;
+      }
+      const prepared = await prepareEntryUpdate(id, entry, options.source ?? undefined);
+      const candidate = prepared.entry;
+      const digest = candidate.type === "mcp" ? candidate.configDigest : candidate.digest;
+      report.to = candidate.source;
+      report.contentChanged = local !== digest;
+      const baseline = entry.type === "mcp" ? entry.configDigest : entry.digest;
+      const pristine = entry.source.kind === "legacy" ? null : entry.source.digest;
+      const modified = local !== baseline || pristine === null || local !== pristine;
+      // An explicit source binding to identical bytes is metadata-only; it
+      // neither discards local content nor claims a historical import event.
+      if (modified && !options.force && !(options.source && local === digest)) {
+        report.status = "local-changes";
+        report.reason = "Local or accepted customizations preserved. Review before using --force.";
+        continue;
+      }
+      const sourceChanged = sourceIdentity(entry.source) !== sourceIdentity(candidate.source);
+      if (local === digest && !sourceChanged && baseline === digest && pristine === digest) {
+        report.status = entry.source.kind === "github" && /^[a-f0-9]{40}$/i.test(entry.source.ref ?? "")
+          ? "pinned" : "up-to-date";
+        // A repository-only commit change is not an artifact update.
+        delete report.to;
+        continue;
+      }
+      if (candidate.type === "mcp" && entry.type === "mcp" && entry.configDigest === digest) {
+        candidate.tools = entry.tools;
+        candidate.toolsFetchedAt = entry.toolsFetchedAt;
+        if (entry.authRequired !== undefined) candidate.authRequired = entry.authRequired;
+      }
+      report.status = "updated";
+      pending.push({ prepared, digest: local, report });
+    } catch (error) {
+      report.status = "error";
+      report.reason = error instanceof Error ? error.message : String(error);
+    }
   }
 
+  let contentApplied = false;
   if (!options.dryRun) {
-    if (changed || catalogMoved) {
-      writeLockfile(options.targetRoot, lock);
-    }
-    if (changed) {
-      const { catalog } = loadRepoCatalog(
-        options.targetRoot,
-        lock.catalog.source,
-      );
-      writeProviders(options.targetRoot, catalog, lock);
+    for (const item of pending) {
+      try {
+        installPreparedEntry(options.targetRoot, lock, item.prepared, item.digest);
+        if (item.report.contentChanged) contentApplied = true;
+      } catch (error) {
+        item.report.status = "error";
+        item.report.reason = error instanceof Error ? error.message : String(error);
+      }
     }
   }
-
-  report(reports, options);
-};
-
-const applyUpdate = (
-  targetRoot: string,
-  parsed: { type: string; name: string },
-  entry: SkillEntry | CommandEntry | McpEntry | PluginEntry,
-  sourceCatalog: Catalog,
-  repoCatalog: Catalog,
-  lock: Lockfile,
-  force: boolean,
-  dryRun: boolean,
-): UpdateReport => {
-  const id = `${parsed.type}:${parsed.name}`;
-
-  if (entry.type === "skill") {
-    const src = sourceCatalog.skills.find((s) => s.name === parsed.name);
-    if (!src) return { id, status: "not-in-catalog" };
-    if (src.digest === entry.digest) return { id, status: "up-to-date" };
-    const repo = repoCatalog.skills.find((s) => s.name === parsed.name);
-    if (repo && repo.digest !== entry.digest && !force) {
-      return { id, status: "local-changes" };
+  let providerError: string | undefined;
+  if (contentApplied) {
+    try {
+      writeProviders(options.targetRoot, inspectLocalEntries(options.targetRoot, lock).catalog, lock);
+    } catch (error) {
+      providerError = `${error instanceof Error ? error.message : String(error)}. Installed entries are locked; retry quiver-cli sync.`;
     }
-    if (dryRun) return { id, status: "updated" };
-    const dest = resolve(targetRoot, ".agents", src.sourcePath);
-    rmSync(dest, { recursive: true, force: true });
-    mkdirSync(dirname(dest), { recursive: true });
-    cpSync(src.absDir, dest, { recursive: true });
-    entry.digest = src.digest;
-    entry.frontmatter = src.frontmatter;
-    entry.sourcePath = src.sourcePath;
-    return { id, status: "updated" };
   }
-
-  if (entry.type === "command") {
-    const src = sourceCatalog.commands.find((c) => c.name === parsed.name);
-    if (!src) return { id, status: "not-in-catalog" };
-    if (src.digest === entry.digest) return { id, status: "up-to-date" };
-    const repo = repoCatalog.commands.find((c) => c.name === parsed.name);
-    if (repo && repo.digest !== entry.digest && !force) {
-      return { id, status: "local-changes" };
-    }
-    if (dryRun) return { id, status: "updated" };
-    const dest = resolve(targetRoot, ".agents", src.sourcePath);
-    mkdirSync(dirname(dest), { recursive: true });
-    cpSync(src.absPath, dest, { force: true });
-    entry.digest = src.digest;
-    entry.sourcePath = src.sourcePath;
-    return { id, status: "updated" };
-  }
-
-  if (entry.type === "plugin") {
-    const src = sourceCatalog.plugins.find((p) => p.name === parsed.name);
-    if (!src) return { id, status: "not-in-catalog" };
-    if (src.digest === entry.digest) return { id, status: "up-to-date" };
-    const repo = repoCatalog.plugins.find((p) => p.name === parsed.name);
-    if (repo && repo.digest !== entry.digest && !force) {
-      return { id, status: "local-changes" };
-    }
-    if (dryRun) return { id, status: "updated" };
-    const dest = resolve(targetRoot, ".agents", src.sourcePath);
-    mkdirSync(dirname(dest), { recursive: true });
-    cpSync(src.absPath, dest, { force: true });
-    const configPath = resolve(targetRoot, ".agents/config.json");
-    const config = JSON.parse(readFileSync(configPath, "utf8")) as {
-      plugins?: Record<string, unknown>;
-    };
-    config.plugins = {
-      ...config.plugins,
-      [parsed.name]: sourceCatalog.config.plugins?.[parsed.name],
-    };
-    writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
-    entry.digest = src.digest;
-    entry.sourcePath = src.sourcePath;
-    entry.requires = src.requires;
-    return { id, status: "updated" };
-  }
-
-  // MCP: replace this server's definition in the repo's .agents/config.json.
-  const src = sourceCatalog.mcp.find((m) => m.name === parsed.name);
-  if (!src) return { id, status: "not-in-catalog" };
-  if (src.configDigest === entry.configDigest) return { id, status: "up-to-date" };
-  const repo = repoCatalog.mcp.find((m) => m.name === parsed.name);
-  if (repo && repo.configDigest !== entry.configDigest && !force) {
-    return { id, status: "local-changes" };
-  }
-  if (dryRun) return { id, status: "updated" };
-  const configPath = resolve(targetRoot, ".agents", "config.json");
-  const config = JSON.parse(readFileSync(configPath, "utf8")) as {
-    mcpServers?: Record<string, unknown>;
-  };
-  config.mcpServers = { ...config.mcpServers, [parsed.name]: src.server };
-  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
-  entry.configDigest = src.configDigest;
-  entry.transport = src.server.transport;
-  // Tool snapshot belongs to the old definition; re-baseline via check.
-  entry.tools = null;
-  entry.toolsFetchedAt = null;
-  return { id, status: "updated" };
-};
-
-const report = (reports: UpdateReport[], options: CliOptions): void => {
-  const by = (s: UpdateStatus): UpdateReport[] =>
-    reports.filter((r) => r.status === s);
-
+  const by = (status: UpdateStatus): string[] => reports.filter((item) => item.status === status).map((item) => item.id);
+  const errors = by("error");
+  const blocked = [...by("local-changes"), ...by("legacy")];
+  const ok = !errors.length && !blocked.length && !providerError;
   if (options.json) {
-    console.log(
-      JSON.stringify(
-        {
-          ok: true,
-          dryRun: options.dryRun,
-          updated: by("updated").map((r) => r.id),
-          upToDate: by("up-to-date").map((r) => r.id),
-          localChanges: by("local-changes").map((r) => r.id),
-          notInCatalog: by("not-in-catalog").map((r) => r.id),
-        },
-        null,
-        2,
-      ),
-    );
-    return;
+    console.log(JSON.stringify({
+      ok, dryRun: options.dryRun, updated: by("updated"), upToDate: by("up-to-date"),
+      pinned: by("pinned"), localChanges: by("local-changes"), legacy: by("legacy"),
+      errors, reports, ...(providerError ? { providerError } : {}),
+    }, null, 2));
+  } else {
+    ui.block(reports.map((item) => `${item.id}: ${item.status === "updated" && options.dryRun ? "update available" : item.status}${item.reason ? ` (${item.reason})` : ""}`));
+    if (providerError) await ui.error(providerError);
+    if (!reports.length) await ui.info("No installed entries to update.");
   }
-
-  const c = ui.palette();
-  const lines: string[] = [""];
-  const verb = options.dryRun ? "would update" : "updated";
-  for (const r of by("updated")) lines.push(`  ${c.cyan("↑")} ${r.id}  ${verb}`);
-  for (const r of by("local-changes"))
-    lines.push(
-      `  ${c.yellow("▲")} ${r.id}  ${c.yellow("local changes - skipped (use --force)")}`,
-    );
-  for (const r of by("not-in-catalog"))
-    lines.push(`  ${c.dim("•")} ${r.id}  ${c.dim("not in catalog")}`);
-  for (const r of by("up-to-date"))
-    lines.push(`  ${c.green("✓")} ${r.id}  ${c.dim("up to date")}`);
-
-  const updated = by("updated").length;
-  lines.push(
-    "",
-    `  ${
-      updated
-        ? options.dryRun
-          ? c.cyan(
-              `↑ ${updated} would be updated - run without --dry-run to apply`,
-            )
-          : c.cyan(
-              `↑ ${updated} updated - review and commit .agents/ + quiver.lock`,
-            )
-        : c.green("✓ everything up to date with the catalog")
-    }`,
-    "",
-  );
-  ui.block(lines);
+  if (!ok) process.exitCode = errors.length || providerError ? 2 : 1;
 };

@@ -2,22 +2,30 @@ import { accessSync, constants } from "node:fs";
 import { delimiter, resolve } from "node:path";
 
 import type { CliOptions } from "../cli.js";
-import { loadRepoCatalog, repoCatalogExists } from "../catalog/repo.js";
-import { readLockfile, writeLockfile } from "../lockfile/io.js";
-import { parseEntryId, type McpEntry } from "../lockfile/schema.js";
+import { jsonDigest } from "../catalog/digest.js";
+import { repoCatalogExists } from "../catalog/repo.js";
+import {
+  lockfilePath,
+  readLockfile,
+  requireV2Lockfile,
+  writeLockfile,
+} from "../lockfile/io.js";
+import { parseEntryId } from "../lockfile/schema.js";
 import { diffSnapshots, isEmptyDiff, type ToolDiff } from "../mcp/diff.js";
 import { introspect } from "../mcp/introspect.js";
 import { findOpencodeToken } from "../mcp/opencode-auth.js";
-import { backfillTokens, toSnapshot } from "../mcp/snapshot.js";
+import { toSnapshot } from "../mcp/snapshot.js";
+import { assertSafeMutationPath } from "../path.js";
 import { disabledMcpServers } from "../providers/local-config.js";
 import { checkProviders } from "../providers/write.js";
 import { interpolateEnvVars, loadEnvLocal } from "../secrets/interpolate.js";
 import * as ui from "../ui/prompts.js";
-
-interface SkillDriftItem {
-  id: string;
-  kind: "content";
-}
+import {
+  acceptLocalEntries,
+  inspectLocalEntries,
+  type LocalDriftItem,
+  type LocalIssue,
+} from "./locksync.js";
 
 interface PluginRequirementIssue {
   id: string;
@@ -26,10 +34,29 @@ interface PluginRequirementIssue {
 
 interface McpReport {
   id: string;
-  status: "ok" | "baseline" | "skipped" | "drift" | "accepted";
+  status: "ok" | "missing-baseline" | "skipped" | "error" | "drift" | "accepted";
+  baseline: "present" | "missing";
+  intentional?: boolean;
   reason?: string;
   authRequired?: boolean;
   diff?: ToolDiff;
+  tokens?: number;
+}
+
+interface CheckReport {
+  ok: boolean;
+  complete: boolean;
+  status: "ok" | "drift" | "incomplete";
+  checked: CheckedCounts;
+  skillDrift: LocalDriftItem[];
+  configDrift: LocalDriftItem[];
+  missing: LocalIssue[];
+  unsafe: LocalIssue[];
+  accepted: string[];
+  acceptanceBlocked: boolean;
+  pluginRequirements: PluginRequirementIssue[];
+  shims: string[];
+  mcp: McpReport[];
 }
 
 export const check = async (options: CliOptions): Promise<void> => {
@@ -41,87 +68,137 @@ export const check = async (options: CliOptions): Promise<void> => {
     return fail(options, "no-agents", "No .agents/ directory found. Run `quiver-cli init` first.");
   }
 
-  loadEnvLocal(options.targetRoot);
-  const { catalog } = loadRepoCatalog(options.targetRoot, lock.catalog.source);
+  const [target] = options.positionals;
+  if (options.positionals.length > 1 || (target && options.all)) {
+    return fail(options, "invalid-target", "Select exactly one installed id or --all, not both.");
+  }
+  if (target && (!parseEntryId(target) || !Object.hasOwn(lock.entries, target))) {
+    return fail(options, "not-installed", `Not installed: ${target}. Use an installed id such as skill:name or mcp:name.`);
+  }
+  if (options.accept) {
+    if (!target && !options.all) {
+      return fail(options, "accept-target-required", "Use `quiver-cli check <id> --accept` or `quiver-cli check --all --accept`.");
+    }
+    try {
+      requireV2Lockfile(lock);
+      assertSafeMutationPath(options.targetRoot, lockfilePath(options.targetRoot), "Lockfile");
+    } catch (error) {
+      return fail(options, "accept-not-allowed", error instanceof Error ? error.message : String(error));
+    }
+  }
 
-  // --- Skill / command content drift (local digests) -----------------------
+  const initialLockDigest = options.accept ? jsonDigest(lock) : null;
+  loadEnvLocal(options.targetRoot);
+  let local;
+  try {
+    local = inspectLocalEntries(options.targetRoot, lock);
+  } catch (error) {
+    return fail(options, "invalid-local-content", error instanceof Error ? error.message : String(error));
+  }
+  const { catalog } = local;
+  const selected = new Set(target ? [target] : Object.keys(lock.entries));
+  const missing = local.missing.filter((item) => selected.has(item.id));
+  const unsafe = local.unsafe.filter((item) => selected.has(item.id));
+  const acceptanceBlocked = options.accept && (missing.length > 0 || unsafe.length > 0);
+  const accepting = options.accept && !acceptanceBlocked;
+  const accepted = accepting ? [...selected] : [];
+  const drift = local.drift.filter((item) => selected.has(item.id) && !accepting);
+  const skillDrift = drift.filter((item) => item.kind === "content");
+  const configDrift = drift.filter((item) => item.kind === "config");
+
   const skillByName = new Map(catalog.skills.map((s) => [s.name, s]));
   const commandByName = new Map(catalog.commands.map((c) => [c.name, c]));
   const pluginByName = new Map(catalog.plugins.map((p) => [p.name, p]));
-  const skillDrift: SkillDriftItem[] = [];
+  const mcpByName = new Map(catalog.mcp.map((m) => [m.name, m]));
   const pluginRequirements: PluginRequirementIssue[] = [];
   const checked = { skills: 0, commands: 0, mcp: 0, plugins: 0 };
 
-  for (const [id, entry] of Object.entries(lock.entries)) {
+  for (const id of selected) {
+    const entry = lock.entries[id]!;
     const p = parseEntryId(id);
     if (!p) continue;
     if (entry.type === "skill") {
-      const cat = skillByName.get(p.name);
-      if (!cat) continue;
-      checked.skills += 1;
-      if (cat.digest !== entry.digest) skillDrift.push({ id, kind: "content" });
+      if (skillByName.has(p.name)) checked.skills += 1;
     } else if (entry.type === "command") {
-      const cat = commandByName.get(p.name);
-      if (!cat) continue;
-      checked.commands += 1;
-      if (cat.digest !== entry.digest) skillDrift.push({ id, kind: "content" });
+      if (commandByName.has(p.name)) checked.commands += 1;
     } else if (entry.type === "plugin") {
       const cat = pluginByName.get(p.name);
       if (!cat) continue;
       checked.plugins += 1;
-      if (cat.digest !== entry.digest) skillDrift.push({ id, kind: "content" });
-      if (lock.providers?.length && !lock.providers.includes(entry.provider)) {
+      if (lock.providers?.length && !lock.providers.includes(cat.provider)) {
         continue;
       }
-      for (const command of entry.requires) {
+      for (const command of cat.requires) {
         if (!hasCommand(command)) pluginRequirements.push({ id, command });
       }
+    } else if (mcpByName.has(p.name)) {
+      checked.mcp += 1;
     }
   }
 
   // --- Provider shim drift (out-of-sync / missing / stale generated files) --
   const shimProblems = checkProviders(options.targetRoot, catalog, lock);
 
-  // --- MCP tool snapshot drift (re-introspection) --------------------------
-  // Skipped entirely in --offline mode (no network, no foreign code).
   const mcpReports: McpReport[] = [];
   const disabled = disabledMcpServers(options.targetRoot);
-  let lockChanged = false;
+  const initialLocalDigest = accepting
+    ? jsonDigest({ local, disabled: [...disabled].sort() })
+    : null;
 
-  for (const [id, entry] of Object.entries(lock.entries)) {
-    if (options.offline) break;
+  for (const id of selected) {
+    const entry = lock.entries[id]!;
     if (entry.type !== "mcp") continue;
     const p = parseEntryId(id)!;
-    const catMcp = catalog.mcp.find((m) => m.name === p.name);
+    const catMcp = mcpByName.get(p.name);
     if (!catMcp) continue;
-    // Locally disabled servers keep their snapshot as the baseline but are
-    // not re-introspected (they may be off precisely to avoid the cost).
-    if (disabled.has(p.name)) {
-      mcpReports.push({ id, status: "skipped", reason: "disabled locally" });
+    if (accepting && entry.configDigest !== catMcp.configDigest) {
+      // Tools and auth observations belong to the configuration they came from.
+      entry.tools = null;
+      entry.toolsFetchedAt = null;
+      delete entry.authRequired;
+    }
+    const baseline = entry.tools ? "present" : "missing";
+    const skipReason = options.offline
+      ? "offline"
+      : disabled.has(p.name)
+        ? "disabled locally"
+        : catMcp.server.transport === "stdio" && !options.introspectStdio
+          ? "stdio server skipped (pass --introspect-stdio to run it)"
+          : null;
+    if (skipReason || acceptanceBlocked) {
+      mcpReports.push({
+        id,
+        status: "skipped",
+        baseline,
+        intentional: Boolean(skipReason),
+        reason: skipReason ?? "acceptance blocked by missing or unsafe local content",
+      });
       continue;
     }
-    checked.mcp += 1;
 
     const server = interpolateEnvVars(catMcp.server);
-    const mcpEntry = entry as McpEntry;
     // OAuth-protected HTTP servers: reuse opencode's access token (read-only).
     const cred =
       server.transport === "http"
         ? findOpencodeToken(p.name, server.url)
         : ({ status: "none" } as const);
-    const res = await introspect(server, {
-      allowStdio: options.introspectStdio,
-      authToken: cred.status === "ok" ? cred.accessToken : undefined,
-    });
+    let res;
+    try {
+      res = await introspect(server, {
+        allowStdio: options.introspectStdio,
+        authToken: cred.status === "ok" ? cred.accessToken : undefined,
+      });
+    } catch (error) {
+      res = { ok: false as const, reason: error instanceof Error ? error.message : String(error) };
+    }
     if (!res.ok) {
-      if (res.authRequired && !mcpEntry.authRequired) {
-        mcpEntry.authRequired = true;
-        lockChanged = true;
-      }
+      if (accepting && res.authRequired) entry.authRequired = true;
       const reason = res.authRequired ? authHint(cred.status, p.name) : res.reason;
       mcpReports.push({
         id,
-        status: "skipped",
+        status: res.authRequired ? "skipped" : "error",
+        baseline,
+        intentional: false,
         reason,
         ...(res.authRequired ? { authRequired: true } : {}),
       });
@@ -129,69 +206,87 @@ export const check = async (options: CliOptions): Promise<void> => {
     }
 
     const current = toSnapshot(res.tools);
-
-    if (!mcpEntry.tools) {
-      // First successful introspection: record baseline.
-      mcpEntry.tools = current;
-      mcpEntry.toolsFetchedAt = new Date().toISOString();
-      lockChanged = true;
-      mcpReports.push({ id, status: "baseline" });
-      continue;
-    }
-
-    const diff = diffSnapshots(mcpEntry.tools, current);
-    if (isEmptyDiff(diff)) {
-      // Backfill token estimates on snapshots recorded before they existed.
-      if (backfillTokens(mcpEntry.tools, current)) lockChanged = true;
-      mcpReports.push({ id, status: "ok" });
-    } else if (options.accept) {
-      // Record the current snapshot as the new baseline.
-      mcpEntry.tools = current;
-      mcpEntry.toolsFetchedAt = new Date().toISOString();
-      lockChanged = true;
-      mcpReports.push({ id, status: "accepted", diff });
+    const tokens = Object.values(current).reduce((sum, tool) => sum + (tool.tokens ?? 0), 0);
+    const diff = entry.tools ? diffSnapshots(entry.tools, current) : undefined;
+    if (accepting) {
+      entry.tools = current;
+      entry.toolsFetchedAt = new Date().toISOString();
+      if (
+        cred.status !== "ok" &&
+        (server.transport === "stdio" ||
+          !Object.keys(server.headers ?? {}).some((key) => key.toLowerCase() === "authorization"))
+      ) {
+        delete entry.authRequired;
+      }
+      mcpReports.push({ id, status: "accepted", baseline: "present", tokens, ...(diff ? { diff } : {}) });
+    } else if (!diff) {
+      mcpReports.push({ id, status: "missing-baseline", baseline, tokens });
+    } else if (isEmptyDiff(diff)) {
+      mcpReports.push({ id, status: "ok", baseline, tokens });
     } else {
-      mcpReports.push({ id, status: "drift", diff });
+      mcpReports.push({ id, status: "drift", baseline, tokens, diff });
     }
   }
 
-  // Persist any newly recorded baselines.
-  if (lockChanged) writeLockfile(options.targetRoot, lock);
+  if (accepting && selected.size) {
+    try {
+      assertSafeMutationPath(options.targetRoot, lockfilePath(options.targetRoot), "Lockfile");
+      const currentLock = readLockfile(options.targetRoot);
+      if (!currentLock || jsonDigest(currentLock) !== initialLockDigest ||
+          jsonDigest({
+            local: inspectLocalEntries(options.targetRoot, currentLock),
+            disabled: [...disabledMcpServers(options.targetRoot)].sort(),
+          }) !== initialLocalDigest) {
+        throw new Error("Check inputs changed");
+      }
+    } catch {
+      return fail(
+        options,
+        "concurrent-change",
+        "quiver.lock or local .agents content changed while checking. No baselines were accepted. " +
+          `Retry \`quiver-cli check ${target ?? "--all"} --accept\` after other edits finish.`,
+      );
+    }
+    acceptLocalEntries(catalog, lock, selected);
+    writeLockfile(options.targetRoot, lock);
+  }
 
   const hasDrift =
     skillDrift.length > 0 ||
+    configDrift.length > 0 ||
     pluginRequirements.length > 0 ||
     shimProblems.length > 0 ||
     mcpReports.some((r) => r.status === "drift");
+  const complete =
+    missing.length === 0 && unsafe.length === 0 &&
+    mcpReports.every((r) => r.status === "ok" || r.status === "drift" || r.status === "accepted");
+  const hasProblems =
+    hasDrift || missing.length > 0 || unsafe.length > 0 ||
+    mcpReports.some((r) =>
+      r.status === "error" || r.status === "missing-baseline" ||
+      (r.status === "skipped" && !r.intentional));
+  const result: CheckReport = {
+    ok: !hasProblems,
+    complete,
+    status: hasDrift ? "drift" : hasProblems || !complete ? "incomplete" : "ok",
+    checked,
+    skillDrift,
+    configDrift,
+    missing,
+    unsafe,
+    accepted,
+    acceptanceBlocked,
+    pluginRequirements,
+    shims: shimProblems,
+    mcp: mcpReports,
+  };
 
   if (options.json) {
-    console.log(
-      JSON.stringify(
-        {
-          ok: !hasDrift,
-          checked,
-          skillDrift,
-          pluginRequirements,
-          shims: shimProblems,
-          mcp: mcpReports,
-        },
-        null,
-        2,
-      ),
-    );
-    if (hasDrift) process.exitCode = 1;
-    return;
+    console.log(JSON.stringify(result, null, 2));
+  } else {
+    await report(result, options);
   }
-
-  await report(
-    skillDrift,
-    pluginRequirements,
-    shimProblems,
-    mcpReports,
-    checked,
-    options,
-  );
-  if (hasDrift) process.exitCode = 1;
+  if (hasProblems) process.exitCode = 1;
 };
 
 export interface CheckedCounts {
@@ -202,19 +297,38 @@ export interface CheckedCounts {
 }
 
 const report = async (
-  skillDrift: SkillDriftItem[],
-  pluginRequirements: PluginRequirementIssue[],
-  shimProblems: string[],
-  mcpReports: McpReport[],
-  checked: CheckedCounts,
+  result: CheckReport,
   options: CliOptions,
 ): Promise<void> => {
+  const {
+    skillDrift,
+    configDrift,
+    pluginRequirements,
+    shims: shimProblems,
+    mcp: mcpReports,
+    checked,
+  } = result;
+  for (const [label, issues] of [
+    ["Missing locked entries", result.missing],
+    ["Unsafe local entries", result.unsafe],
+  ] as const) {
+    if (issues.length) {
+      await ui.warn(`${label}:\n  - ${issues.map((item) => `${item.id}: ${item.reason}`).join("\n  - ")}`);
+    }
+  }
+  if (result.acceptanceBlocked) {
+    await ui.error("Acceptance not allowed for missing or unsafe local content; no baselines changed.");
+  }
   if (skillDrift.length) {
     await ui.warn(
       `Managed content changed since lockfile:\n  - ${skillDrift
         .map((s) => s.id)
         .join("\n  - ")}`,
     );
+  }
+
+  if (configDrift.length) {
+    await ui.warn(`MCP definitions changed since lockfile:\n  - ${configDrift.map((item) => item.id).join("\n  - ")}`);
   }
 
   if (pluginRequirements.length) {
@@ -231,18 +345,17 @@ const report = async (
     );
   }
 
-  // OAuth-protected servers have an actionable fix - always show the reason.
-  const authSkipped = mcpReports.filter(
-    (r) => r.status === "skipped" && r.authRequired,
+  const failed = mcpReports.filter(
+    (r) => r.status === "error" || (r.status === "skipped" && !r.intentional),
   );
-  for (const r of authSkipped) {
+  for (const r of failed) {
     await ui.warn(`${r.id}: ${r.reason}`);
   }
 
   // Other skipped servers (e.g. stdio without --introspect-stdio) are the
   // common, expected case - collapse them into a single line instead of one each.
   const skipped = mcpReports.filter(
-    (r) => r.status === "skipped" && !r.authRequired,
+    (r) => r.status === "skipped" && r.intentional,
   );
   if (skipped.length) {
     const names = skipped.map((r) => parseEntryId(r.id)?.name ?? r.id);
@@ -255,16 +368,14 @@ const report = async (
     );
   }
 
-  const baselined = mcpReports.filter((r) => r.status === "baseline");
-  if (baselined.length) {
-    await ui.info(
-      `recorded tool baseline: ${baselined.map((r) => r.id).join(", ")}`,
+  for (const r of mcpReports.filter((item) => item.baseline === "missing")) {
+    await ui.warn(
+      `${r.id}: no recorded tool baseline. Run \`quiver-cli check ${r.id} --accept\` to record a snapshot.`,
     );
   }
 
-  const accepted = mcpReports.filter((r) => r.status === "accepted");
-  for (const r of accepted) {
-    await ui.success(`${r.id}: accepted new tool baseline`);
+  if (result.accepted.length) {
+    await ui.info(`Accepted local baselines: ${result.accepted.join(", ")}. Source baselines were not changed.`);
   }
 
   const drifted = mcpReports.filter((r) => r.status === "drift");
@@ -274,14 +385,13 @@ const report = async (
   }
 
   const summary = summarize(checked);
-  const hasDrift =
-    skillDrift.length > 0 || shimProblems.length > 0 || drifted.length > 0;
-  const hasProblems = hasDrift || pluginRequirements.length > 0;
-  if (!hasProblems) {
+  if (result.ok && result.complete) {
     await ui.success(`check passed: ${summary}, no drift detected.`);
   } else {
-    await ui.info(`checked ${summary}, drift detected.`);
-    await recommend(skillDrift, shimProblems, drifted);
+    await ui.info(`checked ${summary}${result.status === "drift" ? ", drift detected" : ""}${!result.complete ? ", check incomplete" : ""}.`);
+    if (skillDrift.length || configDrift.length || shimProblems.length || drifted.length) {
+      await recommend([...skillDrift, ...configDrift], shimProblems, drifted);
+    }
   }
 };
 
@@ -324,23 +434,25 @@ const list = (names: string[], verbose: boolean, sample = 3): string => {
 
 // Tell the user how to update the lockfile for the drift that was found.
 const recommend = async (
-  skillDrift: SkillDriftItem[],
+  localDrift: LocalDriftItem[],
   shimProblems: string[],
   drifted: McpReport[],
 ): Promise<void> => {
   const c = ui.palette();
-  const lines: string[] = ["to update the lockfile baseline:"];
+  const lines: string[] = ["to resolve drift:"];
   if (shimProblems.length) {
     lines.push(`  ${c.cyan("quiver-cli sync")}   regenerate provider shims`);
   }
   if (drifted.length) {
-    lines.push(`  ${c.cyan("quiver-cli check --accept")}   accept the new MCP tool snapshots`);
+    for (const item of drifted) {
+      lines.push(`  ${c.cyan(`quiver-cli check ${item.id} --accept`)}   accept the observed MCP tool snapshot`);
+    }
   }
-  if (skillDrift.length) {
-    const ids = skillDrift.map((s) => s.id);
+  if (localDrift.length) {
+    const ids = localDrift.map((s) => s.id);
     const one = ids.length === 1 ? ids[0] : "<id>";
     lines.push(
-      `  ${c.cyan(`quiver-cli update ${one}`)}   pull catalog content for the changed skill/command`,
+      `  ${c.cyan(`quiver-cli check ${one} --accept`)}   accept local changes without changing source provenance`,
     );
     if (ids.length > 1) {
       lines.push(`  ${c.dim(`changed: ${ids.join(", ")}`)}`);
@@ -399,7 +511,7 @@ const fail = async (
   code: string,
   message: string,
 ): Promise<void> => {
-  if (options.json) console.log(JSON.stringify({ ok: false, error: code }));
+  if (options.json) console.log(JSON.stringify({ ok: false, complete: false, status: "error", error: code, message, accepted: [] }));
   else await ui.error(message);
   process.exitCode = 1;
 };

@@ -1,13 +1,14 @@
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 import type { CliOptions } from "../cli.js";
 import { removeArtifact } from "../catalog/materialize.js";
-import { loadRepoCatalog } from "../catalog/repo.js";
-import { readLockfile, writeLockfile } from "../lockfile/io.js";
+import { lockfilePath, readLockfile, requireV2Lockfile, writeLockfile } from "../lockfile/io.js";
 import { parseEntryId } from "../lockfile/schema.js";
+import { assertSafeMutationPath, resolveContainedPath } from "../path.js";
 import { writeProviders } from "../providers/write.js";
 import * as ui from "../ui/prompts.js";
+import { inspectLocalEntries } from "./locksync.js";
 
 export const remove = async (options: CliOptions): Promise<void> => {
   const id = options.positionals[0];
@@ -31,57 +32,60 @@ export const remove = async (options: CliOptions): Promise<void> => {
     process.exitCode = 1;
     return;
   }
+  requireV2Lockfile(lock);
   const entry = lock.entries[id];
   if (!entry) {
     await ui.info(`${id} is not installed.`);
     return;
   }
 
-  // Remove the materialized artifact (skills/commands). MCP entries only live
-  // in config.json, which is rewritten by writeProviders below.
-  if (
-    entry.type === "skill" ||
-    entry.type === "command" ||
-    entry.type === "plugin"
-  ) {
-    removeArtifact(options.targetRoot, entry.sourcePath);
-    cleanupEmptyGroups(options.targetRoot);
+  const { catalog, unsafe } = inspectLocalEntries(options.targetRoot, lock);
+  if (unsafe.length) {
+    throw new Error(`Unsafe local content: ${unsafe.map((item) => `${item.id}: ${item.reason}`).join("; ")}`);
+  }
+  const current = entry.type === "mcp"
+    ? catalog.mcp.find((item) => item.name === parsed.name)?.configDigest
+    : [...catalog.skills, ...catalog.commands, ...catalog.plugins]
+        .find((item) => item.name === parsed.name && item.sourcePath === entry.installedPath)?.digest;
+  const accepted = entry.type === "mcp" ? entry.configDigest : entry.digest;
+  const path = entry.type === "mcp" ? null : resolveContainedPath(
+    resolve(options.targetRoot, ".agents"), entry.installedPath, id,
+  );
+  const dirty = current === undefined
+    ? (path !== null && existsSync(path)) ||
+      (entry.type === "plugin" && Object.hasOwn(catalog.config.plugins ?? {}, parsed.name))
+    : current !== accepted || (entry.source.kind !== "legacy" && current !== entry.source.digest);
+  if (dirty && !options.force) {
+    await ui.error(`${id} has local changes. Use --force to remove it and discard those changes.`);
+    process.exitCode = 1;
+    return;
+  }
+
+  assertSafeMutationPath(options.targetRoot, lockfilePath(options.targetRoot), "Lockfile output");
+  if (path) assertSafeMutationPath(options.targetRoot, path, "Artifact removal");
+  if (entry.type === "skill") {
+    assertSafeMutationPath(options.targetRoot, resolve(options.targetRoot, ".agents/skills"), "Skill group cleanup");
+  }
+  if (entry.type !== "mcp") {
+    removeArtifact(options.targetRoot, entry.installedPath);
+    if (entry.type === "skill") cleanupEmptyGroups(options.targetRoot);
+  }
+
+  // Remove only the selected definition; untracked local definitions are user content.
+  if (entry.type === "mcp" || entry.type === "plugin") {
+    const key = entry.type === "mcp" ? "mcpServers" : "plugins";
+    const definitions = catalog.config[key];
+    if (definitions && Object.hasOwn(definitions, parsed.name)) {
+      delete definitions[parsed.name];
+      if (!Object.keys(definitions).length) delete catalog.config[key];
+      writeFileSync(catalog.configPath, JSON.stringify(catalog.config, null, 2) + "\n");
+    }
   }
 
   delete lock.entries[id];
   writeLockfile(options.targetRoot, lock);
-
-  // For MCP removal we must also rewrite the materialized config.json so the
-  // repo catalog no longer advertises the server.
-  rewriteRepoMcp(options.targetRoot, lock);
-  rewriteRepoPlugins(options.targetRoot, lock);
-
-  const { catalog } = loadRepoCatalog(options.targetRoot, lock.catalog.source);
   writeProviders(options.targetRoot, catalog, lock);
   await ui.success(`Removed ${id}.`);
-};
-
-const rewriteRepoPlugins = (
-  targetRoot: string,
-  lock: NonNullable<ReturnType<typeof readLockfile>>,
-): void => {
-  const configPath = resolve(targetRoot, ".agents/config.json");
-  if (!existsSync(configPath)) return;
-  const config = JSON.parse(readFileSync(configPath, "utf8")) as {
-    plugins?: Record<string, unknown>;
-  };
-  if (!config.plugins) return;
-  const keep = new Set(
-    Object.keys(lock.entries)
-      .map(parseEntryId)
-      .filter((p): p is { type: "plugin"; name: string } => p?.type === "plugin")
-      .map((p) => p.name),
-  );
-  config.plugins = Object.fromEntries(
-    Object.entries(config.plugins).filter(([name]) => keep.has(name)),
-  );
-  if (!Object.keys(config.plugins).length) delete config.plugins;
-  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
 };
 
 // Drop now-empty group folders under .agents/skills.
@@ -94,30 +98,4 @@ const cleanupEmptyGroups = (targetRoot: string): void => {
     if (existsSync(resolve(dir, "SKILL.md"))) continue; // it's a skill
     if (readdirSync(dir).length === 0) rmSync(dir, { recursive: true, force: true });
   }
-};
-
-// Rewrite .agents/config.json mcpServers to match remaining lockfile mcp entries.
-const rewriteRepoMcp = (
-  targetRoot: string,
-  lock: NonNullable<ReturnType<typeof readLockfile>>,
-): void => {
-  const configPath = resolve(targetRoot, ".agents/config.json");
-  if (!existsSync(configPath)) return;
-  const config = JSON.parse(readFileSync(configPath, "utf8")) as {
-    mcpServers?: Record<string, unknown>;
-  };
-  if (!config.mcpServers) return;
-  const keep = new Set(
-    Object.keys(lock.entries)
-      .map(parseEntryId)
-      .filter((p): p is { type: "mcp"; name: string } => p?.type === "mcp")
-      .map((p) => p.name),
-  );
-  const kept: Record<string, unknown> = {};
-  for (const [name, server] of Object.entries(config.mcpServers)) {
-    if (keep.has(name)) kept[name] = server;
-  }
-  if (Object.keys(kept).length) config.mcpServers = kept;
-  else delete config.mcpServers;
-  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
 };

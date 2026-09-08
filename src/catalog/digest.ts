@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { readdirSync, readFileSync, statSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { lstatSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { relative, resolve, sep } from "node:path";
 
 const sha256 = (data: string | Buffer): string =>
   "sha256:" + createHash("sha256").update(data).digest("hex");
@@ -9,26 +9,34 @@ export const fileDigest = (path: string): string => sha256(readFileSync(path));
 
 // Hash a directory tree deterministically: sorted relative paths, each combined
 // with the sha256 of its contents. Captures SKILL.md plus scripts/assets, so any
-// behavioural change in a skill shows up as a digest change.
+// behavioural change in a skill shows up as a digest change. Modes are excluded.
+// Unsafe entries throw, including during local drift checks; never omit links.
 export const treeDigest = (dir: string): string => {
   const files: string[] = [];
   const walk = (current: string): void => {
-    for (const entry of readdirSync(current, { withFileTypes: true }).sort(
-      (a, b) => a.name.localeCompare(b.name),
-    )) {
-      const full = resolve(current, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (entry.isFile()) files.push(full);
+    const stat = lstatSync(current);
+    if (stat.isDirectory()) {
+      for (const name of readdirSync(current)) walk(resolve(current, name));
+    } else if (stat.isFile() && stat.nlink === 1) {
+      files.push(relative(dir, current).split(sep).join("/"));
+    } else {
+      throw new Error(
+        `Unsafe tree entry (links and special files are not allowed): ${current}`,
+      );
     }
   };
+  if (!lstatSync(dir).isDirectory()) {
+    throw new Error(`Tree root must be a regular directory: ${dir}`);
+  }
   walk(dir);
 
   const hash = createHash("sha256");
-  for (const file of files.sort()) {
-    const rel = relative(dir, file);
+  for (const rel of files.sort()) {
     hash.update(rel);
     hash.update("\0");
-    hash.update(createHash("sha256").update(readFileSync(file)).digest());
+    hash.update(
+      createHash("sha256").update(readFileSync(resolve(dir, rel))).digest(),
+    );
     hash.update("\0");
   }
   return "sha256:" + hash.digest("hex");

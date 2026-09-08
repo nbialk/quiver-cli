@@ -50,14 +50,14 @@ const setup = (): string => {
         "mcp:context7": {
           type: "mcp",
           transport: "http",
-          configDigest: "x",
+          configDigest: `sha256:${"c".repeat(64)}`,
           tools: null,
           toolsFetchedAt: null,
         },
         "mcp:posthog": {
           type: "mcp",
           transport: "http",
-          configDigest: "x",
+          configDigest: `sha256:${"c".repeat(64)}`,
           tools: null,
           toolsFetchedAt: null,
         },
