@@ -1,5 +1,27 @@
 # Changelog
 
+## [2.0.0](https://github.com/nbialk/quiver-cli/compare/v1.3.1...v2.0.0) (2026-09-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* **sources:** v1 lockfiles require migration before mutations. The bundled catalog and upstream command are removed. --yes no longer selects all entries, sync no longer accepts --providers, and check --accept requires an explicit entry or --all.
+
+### Features
+
+* **sources:** add per-entry installs and v2 lockfiles ([dabfca0](https://github.com/nbialk/quiver-cli/commit/dabfca01dbcd654126f4d35eb4bb555b24b23830))
+
+
+### Bug Fixes
+
+* **auth:** avoid mismatched OpenCode tokens ([f87324f](https://github.com/nbialk/quiver-cli/commit/f87324f6b6c43fc9b5ab0c0717a61027dbc4b74e))
+* **catalog:** safeguard artifact materialization ([52c2463](https://github.com/nbialk/quiver-cli/commit/52c2463417fc4fdb42d30f0e7ec082599e2354af))
+
+
+### Documentation
+
+* **v2:** add source model rationale and upgrade guide ([b2521a4](https://github.com/nbialk/quiver-cli/commit/b2521a411016bbfc2d693cdfbfa2100a2fc1e1b2))
+
 ## [1.3.1](https://github.com/nbialk/quiver-cli/compare/v1.3.0...v1.3.1) (2026-09-01)
 
 
