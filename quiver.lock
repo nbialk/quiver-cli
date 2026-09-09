@@ -1,53 +1,84 @@
 {
-  "version": 1,
   "catalog": {
-    "source": "local:template/.agents",
+    "fetchedAt": "2026-06-13T11:43:03.855Z",
     "ref": null,
     "resolved": null,
-    "fetchedAt": "2026-06-13T11:43:03.855Z"
+    "source": "local:template/.agents"
   },
-  "providers": [
-    "opencode"
-  ],
   "entries": {
     "command:cp": {
-      "type": "command",
-      "sourcePath": "commands/cp.md",
-      "digest": "sha256:72929296a712b135be5efec3125f7f837116e44d3dac13fd645239ac6b1e3174"
+      "digest": "sha256:72929296a712b135be5efec3125f7f837116e44d3dac13fd645239ac6b1e3174",
+      "installedPath": "commands/cp.md",
+      "source": {
+        "commit": "233a2b2a696d0c8803da99811cb39675455a40b2",
+        "digest": "sha256:72929296a712b135be5efec3125f7f837116e44d3dac13fd645239ac6b1e3174",
+        "kind": "github",
+        "path": "commands/cp.md",
+        "ref": "main",
+        "repo": "nbialk/quiver-catalog"
+      },
+      "type": "command"
     },
     "command:review": {
-      "type": "command",
-      "sourcePath": "commands/review.md",
-      "digest": "sha256:4c3141ebb64616a28a04e8db2ad8d5b862a88ddc3d66745cbe098b14d23afe7e"
+      "digest": "sha256:4c3141ebb64616a28a04e8db2ad8d5b862a88ddc3d66745cbe098b14d23afe7e",
+      "installedPath": "commands/review.md",
+      "source": {
+        "commit": "233a2b2a696d0c8803da99811cb39675455a40b2",
+        "digest": "sha256:4c3141ebb64616a28a04e8db2ad8d5b862a88ddc3d66745cbe098b14d23afe7e",
+        "kind": "github",
+        "path": "commands/review.md",
+        "ref": "main",
+        "repo": "nbialk/quiver-catalog"
+      },
+      "type": "command"
     },
     "mcp:context7": {
-      "type": "mcp",
-      "transport": "http",
       "configDigest": "sha256:c41554e5c6c2c8667833cfa08ed952fedc7130897008794f633045420bef23a3",
+      "source": {
+        "commit": "233a2b2a696d0c8803da99811cb39675455a40b2",
+        "digest": "sha256:c41554e5c6c2c8667833cfa08ed952fedc7130897008794f633045420bef23a3",
+        "kind": "github",
+        "path": "",
+        "ref": "main",
+        "repo": "nbialk/quiver-catalog"
+      },
       "tools": {
-        "resolve-library-id": {
-          "description": "Resolves a package/product name to a Context7-compatible library ID and returns matching libraries.\n\nYou MUST call this function before 'Query Documentation' tool to obtain a valid Context7-compatible library ID UNLESS the user explicitly provides a library ID in the format '/org/project' or '/org/project/version' in their query.\n\nEach result includes:\n- Library ID: Context7-compatible identifier (format: /org/project)\n- Name: Library or package name\n- Description: Short summary\n- Code Snippets: Number of available code examples\n- Source Reputation: Authority indicator (High, Medium, Low, or Unknown)\n- Benchmark Score: Quality indicator (100 is the highest score)\n- Versions: List of versions if available. Use one of those versions if the user provides a version in their query. The format of the version is /org/project/version.\n\nFor best results, select libraries based on name match, source reputation, snippet coverage, benchmark score, and relevance to your use case.\n\nSelection Process:\n1. Analyze the query to understand what library/package the user is looking for\n2. Return the most relevant match based on:\n- Name similarity to the query (exact matches prioritized)\n- Description relevance to the query's intent\n- Documentation coverage (prioritize libraries with higher Code Snippet counts)\n- Source reputation (consider libraries with High or Medium reputation more authoritative)\n- Benchmark Score: Quality indicator (100 is the highest score)\n\nResponse Format:\n- Return the selected library ID in a clearly marked section\n- Provide a brief explanation for why this library was chosen\n- If multiple good matches exist, acknowledge this but proceed with the most relevant one\n- If no good matches exist, clearly state this and suggest query refinements\n\nFor ambiguous queries, request clarification before proceeding with a best-guess match.\n\nIMPORTANT: Do not call this tool more than 3 times per question. If you cannot find what you need after 3 calls, use the best result you have.",
-          "inputSchemaHash": "sha256:ff2f303df2072ada223b45bd44955411763b5b6513f9a680400872732fe976b6",
-          "tokens": 724
-        },
         "query-docs": {
           "description": "Retrieves and queries up-to-date documentation and code examples from Context7 for any programming library or framework.\n\nYou must call 'Resolve Context7 Library ID' tool first to obtain the exact Context7-compatible library ID required to use this tool, UNLESS the user explicitly provides a library ID in the format '/org/project' or '/org/project/version' in their query.\n\nDo not call this tool more than 3 times per question.",
           "inputSchemaHash": "sha256:6b6c59ee65e0d7fcbf0aaf4eb42f419e6b13927808ec75af09e62e55921b8942",
           "tokens": 422
+        },
+        "resolve-library-id": {
+          "description": "Resolves a package/product name to a Context7-compatible library ID and returns matching libraries.\n\nYou MUST call this function before 'Query Documentation' tool to obtain a valid Context7-compatible library ID UNLESS the user explicitly provides a library ID in the format '/org/project' or '/org/project/version' in their query.\n\nEach result includes:\n- Library ID: Context7-compatible identifier (format: /org/project)\n- Name: Library or package name\n- Description: Short summary\n- Code Snippets: Number of available code examples\n- Source Reputation: Authority indicator (High, Medium, Low, or Unknown)\n- Benchmark Score: Quality indicator (100 is the highest score)\n- Versions: List of versions if available. Use one of those versions if the user provides a version in their query. The format of the version is /org/project/version.\n\nFor best results, select libraries based on name match, source reputation, snippet coverage, benchmark score, and relevance to your use case.\n\nSelection Process:\n1. Analyze the query to understand what library/package the user is looking for\n2. Return the most relevant match based on:\n- Name similarity to the query (exact matches prioritized)\n- Description relevance to the query's intent\n- Documentation coverage (prioritize libraries with higher Code Snippet counts)\n- Source reputation (consider libraries with High or Medium reputation more authoritative)\n- Benchmark Score: Quality indicator (100 is the highest score)\n\nResponse Format:\n- Return the selected library ID in a clearly marked section\n- Provide a brief explanation for why this library was chosen\n- If multiple good matches exist, acknowledge this but proceed with the most relevant one\n- If no good matches exist, clearly state this and suggest query refinements\n\nFor ambiguous queries, request clarification before proceeding with a best-guess match.\n\nIMPORTANT: Do not call this tool more than 3 times per question. If you cannot find what you need after 3 calls, use the best result you have.",
+          "inputSchemaHash": "sha256:ff2f303df2072ada223b45bd44955411763b5b6513f9a680400872732fe976b6",
+          "tokens": 724
         }
       },
-      "toolsFetchedAt": "2026-08-31T15:42:15.799Z"
+      "toolsFetchedAt": "2026-08-31T15:42:15.799Z",
+      "transport": "http",
+      "type": "mcp"
     },
     "skill:improve": {
-      "type": "skill",
-      "sourcePath": "skills/code/improve",
       "digest": "sha256:e2f901f7dd4af854bbc07022c08c5a0428617f585607b10745eb6a28c98feda9",
-      "pin": null,
       "frontmatter": {
-        "name": "improve",
         "description": "Survey any codebase as a senior advisor and produce prioritized, self-contained implementation plans for OTHER models/agents to execute. Strictly read-only on source code — never implements, fixes, or refactors anything itself. Use when asked to audit a codebase, find improvement opportunities (bugs, security, performance, test coverage, tech debt, migrations, DX), suggest features or where to take the project next (roadmap, product direction), or generate handoff plans for another agent to implement.",
+        "name": "improve",
         "version": null
-      }
+      },
+      "installedPath": "skills/code/improve",
+      "source": {
+        "commit": "03369ee6d7cafbfcecc4346539b05b3dc0a603bb",
+        "digest": "sha256:e2f901f7dd4af854bbc07022c08c5a0428617f585607b10745eb6a28c98feda9",
+        "kind": "github",
+        "path": "skills/improve",
+        "ref": "main",
+        "repo": "shadcn/improve"
+      },
+      "type": "skill"
     }
-  }
+  },
+  "providers": [
+    "opencode"
+  ],
+  "version": 2
 }
