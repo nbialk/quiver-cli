@@ -135,8 +135,7 @@ export const password = async (message: string): Promise<string | null> => {
   const clack = await loadClack();
   if (clack) {
     const value = await clack.password({ message });
-    if (clack.isCancel(value)) return null;
-    return value;
+    return typeof value === "string" ? value : null;
   }
   const { createInterface } = await import("node:readline");
   const rl = createInterface({ input: process.stdin, output: process.stdout });

@@ -6,7 +6,7 @@ is maintained separately in [quiver-catalog](https://github.com/nbialk/quiver-ca
 
 ## Development Setup
 
-Requires Node.js `>=20.12.0` and [pnpm](https://pnpm.io) (see `packageManager`
+Use Node.js 24 LTS and [pnpm](https://pnpm.io) (see `packageManager`
 in `package.json` for the pinned version).
 
 ```bash
