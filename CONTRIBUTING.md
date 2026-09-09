@@ -70,11 +70,9 @@ directory. Historical package-relative locators belong only to legacy provenance
 
 ## Releases
 
-The existing release-please manifest workflow prepares version and changelog
-updates. The V2 cutover sets the root package's `release-as` to `2.0.0` in
-`release-please-config.json`; `package.json` and the release manifest remain at
-the published `1.3.1` until release preparation. Remove the `release-as` override
-after the 2.0.0 release PR is merged so later versions follow Conventional Commits.
+The release-please manifest workflow prepares version and changelog updates
+based on Conventional Commits. Merging a release PR creates the GitHub release
+and publishes the package to npm through the release workflow.
 
 Do not publish a development checkout to validate packaging. Use the package
 test or `npm pack --dry-run --ignore-scripts` after building. Publication remains

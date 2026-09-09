@@ -5,8 +5,8 @@ commands, provider plugins and MCP servers from catalogs. Each installed entry
 has its own source pin and drift baseline. Runtime output remains native to
 OpenCode, Claude Code and Codex; there is no extra agent runtime.
 
-**Release status:** this branch documents V2, targeting 2.0.0. The published
-CLI remains 1.3.1 until the V2 release; use a source build to try these contracts.
+**Release status:** V2 is available as `quiver-cli@2.0.0` on npm.
+For existing V1 projects, follow the [upgrade guide](docs/v2.md#upgrading-an-existing-project).
 
 - Commit `.agents/` and `quiver.lock`. They are the project's local source of truth.
 - Generate provider files with `sync`; do not edit or commit generated output.
