@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.3.0](https://github.com/nbialk/quiver-cli/compare/v2.2.0...v2.3.0) (2026-09-10)
+
+
+### Features
+
+* **check:** stream progress and completed check results ([dc3a120](https://github.com/nbialk/quiver-cli/commit/dc3a1209cb817848eca9a11f0b44b6ae95fcc28b))
+* **list:** show compact summaries with verbose source details ([47f623b](https://github.com/nbialk/quiver-cli/commit/47f623bca403ce531f6db5dcc102422554683b06))
+
+
+### Bug Fixes
+
+* **catalog:** parse nested skill versions and block scalar markers ([250f4dc](https://github.com/nbialk/quiver-cli/commit/250f4dc100e4c6e7bfa540945764f0a70905c6ed))
+
 ## [2.2.0](https://github.com/nbialk/quiver-cli/compare/v2.1.0...v2.2.0) (2026-09-10)
 
 
