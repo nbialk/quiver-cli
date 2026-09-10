@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.1.0](https://github.com/nbialk/quiver-cli/compare/v2.0.0...v2.1.0) (2026-09-10)
+
+
+### Features
+
+* **check:** report source and plugin dependency updates ([ad6486d](https://github.com/nbialk/quiver-cli/commit/ad6486d2397b33fe5c33c5bba716a0c5bf5656a1))
+
+
+### Bug Fixes
+
+* **sources:** materialize internal GitHub symlinks ([d209b88](https://github.com/nbialk/quiver-cli/commit/d209b88cb7f191422a8b69333f38ea66464e9938))
+
 ## [2.0.0](https://github.com/nbialk/quiver-cli/compare/v1.3.1...v2.0.0) (2026-09-08)
 
 
