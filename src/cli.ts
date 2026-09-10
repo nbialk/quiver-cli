@@ -57,7 +57,7 @@ Options:
   --json               Machine-readable output (init, add, update, check,
                        migrate, list, inspect, help, version)
   -V, --verbose        Show full tool lists and description diffs (check);
-                       full tool descriptions (inspect)
+                       full tool descriptions (inspect); source details (list)
   --accept             Accept local baselines; requires an id or --all (check)
   --offline            Skip network checks; still check local plugin versions (check)
   --dry-run            Report what would change without writing (update, migrate)
@@ -102,7 +102,7 @@ const COMMAND_FLAGS: Record<string, string[]> = {
   sync: [],
   providers: ["--providers", "--yes"],
   update: ["--force", "--yes", "--json", "--dry-run", "--source"],
-  list: ["--json"],
+  list: ["--json", "--verbose"],
   inspect: ["--json", "--verbose"],
   check: ["--all", "--json", "--verbose", "--accept", "--offline", "--introspect-stdio"],
   migrate: ["--json", "--dry-run"],

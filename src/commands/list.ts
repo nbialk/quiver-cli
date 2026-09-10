@@ -55,8 +55,10 @@ export const list = async (options: CliOptions): Promise<void> => {
 
   // MCP server details (url/command) live in the repo catalog, not the lock.
   const serverDetail = new Map<string, string>();
+  const skillMetadata = new Map<string, { digest: string; frontmatter: SkillEntry["frontmatter"] }>();
   if (repoCatalogExists(options.targetRoot)) {
     const { catalog } = loadRepoCatalog(options.targetRoot, lock.catalog.source);
+    for (const skill of catalog.skills) skillMetadata.set(skill.name, skill);
     for (const mcp of catalog.mcp) {
       serverDetail.set(
         mcp.name,
@@ -74,7 +76,13 @@ export const list = async (options: CliOptions): Promise<void> => {
   for (const [id, entry] of Object.entries(lock.entries)) {
     const p = parseEntryId(id);
     if (!p) continue;
-    if (entry.type === "skill") skills.push({ name: p.name, entry });
+    if (entry.type === "skill") {
+      const local = skillMetadata.get(p.name);
+      // Reparse metadata cached by older CLI versions only for matching content.
+      // Keep list read-only and preserve locked metadata when local files drift.
+      skills.push({ name: p.name, entry: local?.digest === entry.digest
+        ? { ...entry, frontmatter: local.frontmatter } : entry });
+    }
     else if (entry.type === "command") commands.push({ name: p.name, entry });
     else if (entry.type === "mcp") mcp.push({ name: p.name, entry });
     else if (entry.type === "plugin") plugins.push({ name: p.name, entry });
@@ -133,31 +141,31 @@ export const list = async (options: CliOptions): Promise<void> => {
   if (skills.length) {
     const nameW = Math.max(...skills.map((e) => e.name.length));
     const verW = Math.max(
-      0,
+      1,
       ...skills.map((e) =>
-        e.entry.frontmatter.version ? e.entry.frontmatter.version.length + 1 : 0,
+        e.entry.frontmatter.version ? e.entry.frontmatter.version.length : 1,
       ),
     );
     // 4 indent + nameW + 1 gap + verW + 1 gap = description start column.
-    const descMax = term - (4 + nameW + 1 + verW + 1) - 1;
-    lines.push(`  ${c.bold("skills")}`);
+    const descMax = Math.min(55, term - (4 + nameW + 1 + verW + 1) - 1);
+    lines.push(`  ${c.bold(`Skills · ${skills.length}`)}`);
     for (const { name, entry } of skills) {
       const ver = entry.frontmatter.version
-        ? padCell(`v${entry.frontmatter.version}`, verW, c.cyan)
-        : " ".repeat(verW);
+        ? padCell(entry.frontmatter.version, verW, c.cyan)
+        : padCell("—", verW, c.dim);
       const desc = entry.frontmatter.description
         ? c.dim(truncate(entry.frontmatter.description, descMax))
         : "";
       lines.push(`    ${name.padEnd(nameW)} ${ver} ${desc}`.trimEnd());
-      lines.push(`      ${c.dim(origin(entry.source))}`);
+      if (options.verbose) lines.push(`      ${c.dim(origin(entry.source))}`);
     }
   }
 
   if (commands.length) {
-    lines.push("", `  ${c.bold("commands")}`);
+    lines.push("", `  ${c.bold(`Commands · ${commands.length}`)}`);
     for (const { name, entry } of commands) {
       lines.push(`    /${name}`);
-      lines.push(`      ${c.dim(origin(entry.source))}`);
+      if (options.verbose) lines.push(`      ${c.dim(origin(entry.source))}`);
     }
   }
 
@@ -168,7 +176,7 @@ export const list = async (options: CliOptions): Promise<void> => {
     const toolW = Math.max(
       ...mcp.map((e) => {
         const n = e.entry.tools ? Object.keys(e.entry.tools).length : null;
-        return `${n ?? "?"} tools`.length;
+        return `${n ?? "?"} ${n === 1 ? "tool" : "tools"}`.length;
       }),
     );
     const tokenCell = (entry: McpEntry): string => {
@@ -176,7 +184,7 @@ export const list = async (options: CliOptions): Promise<void> => {
       return total === null ? "? tok" : formatTokens(total);
     };
     const tokW = Math.max(...mcp.map((e) => tokenCell(e.entry).length));
-    lines.push("", `  ${c.bold("mcp servers")}`);
+    lines.push("", `  ${c.bold(`MCP · ${mcp.length}`)}`);
     for (const { name, entry } of mcp) {
       const count = entry.tools ? Object.keys(entry.tools).length : null;
       const tokenTotal = entry.tools ? sumTokens(entry.tools) : null;
@@ -188,7 +196,7 @@ export const list = async (options: CliOptions): Promise<void> => {
         missingTools = true;
       }
       const tools = padCell(
-        `${count ?? "?"} tools`,
+        `${count ?? "?"} ${count === 1 ? "tool" : "tools"}`,
         toolW,
         count === null ? c.dim : c.green,
       );
@@ -200,26 +208,32 @@ export const list = async (options: CliOptions): Promise<void> => {
       const detail = serverDetail.get(name);
       const off = disabled.has(name) ? `  ${c.yellow("disabled")}` : "";
       lines.push(
-        `    ${name.padEnd(nameW)} ${entry.transport.padEnd(5)} ${tools}  ${tokens}` +
-          (detail ? `  ${c.dim(detail)}` : "") +
+        `    ${name.padEnd(nameW)} ${entry.transport} · ${tools} · ${tokens}` +
+          (options.verbose && detail ? `  ${c.dim(detail)}` : "") +
           off,
       );
-      lines.push(`      ${c.dim(origin(entry.source))}`);
+      if (options.verbose) lines.push(`      ${c.dim(origin(entry.source))}`);
     }
   }
 
 
   if (plugins.length) {
-    lines.push("", `  ${c.bold("plugins")}`);
+    lines.push("", `  ${c.bold(`Plugins · ${plugins.length}`)}`);
     for (const { name, entry } of plugins) {
-      const requires = entry.requires.length
+      const requires = options.verbose && entry.requires.length
         ? `  ${c.dim(`requires: ${entry.requires.map(requirementLabel).join(", ")}`)}`
         : "";
-      lines.push(`    ${name} ${c.dim(entry.provider)}${requires}`);
+      const reports = dependencies.get(name) ?? [];
+      const summary = options.verbose ? "" : reports.map((dependency) =>
+        ` · ${dependency.command}${dependency.installedVersion ? ` ${dependency.installedVersion}` : ""} ${dependency.status === "present" ? c.green("✓") : c.yellow(dependency.status)}`,
+      ).join("");
+      lines.push(`    ${name} ${c.dim(entry.provider)}${requires}${summary}`);
       for (const dependency of dependencies.get(name) ?? []) {
-        lines.push(`      ${c.dim(dependencyLabel(dependency))}`);
+        if (options.verbose || dependency.status !== "present") {
+          lines.push(`      ${c.dim(dependencyLabel(dependency))}`);
+        }
       }
-      lines.push(`      ${c.dim(origin(entry.source))}`);
+      if (options.verbose) lines.push(`      ${c.dim(origin(entry.source))}`);
     }
   }
 
@@ -228,9 +242,7 @@ export const list = async (options: CliOptions): Promise<void> => {
     : "claude, opencode, codex";
   lines.push(
     "",
-    `  ${c.bold(
-      `${skills.length} skills · ${commands.length} commands · ${mcp.length} MCP servers · ${plugins.length} plugins`,
-    )}  ${c.dim(`providers: ${providers}`)}`,
+    `  ${c.dim(`${providers.includes(",") ? "Providers" : "Provider"}: ${providers}`)}`,
   );
   for (const name of needsAuth) {
     lines.push(
