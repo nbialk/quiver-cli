@@ -101,9 +101,11 @@ export interface SourceUpdateReport {
 
 export const checkSourceUpdates = async (
   options: Pick<CliOptions, "targetRoot" | "offline">, lock: Lockfile, ids: string[],
+  progress?: { start: (id: string, completed: number, total: number) => void; complete: (result: SourceUpdateReport) => void },
 ): Promise<SourceUpdateReport[]> => {
   const results: SourceUpdateReport[] = [];
   for (const id of ids) {
+    progress?.start(id, results.length, ids.length);
     const entry = lock.entries[id]!;
     const base = { id, from: entry.source, ...(entry.type === "plugin" ? { scope: "adapter" as const } : {}) };
     if (options.offline) {
@@ -123,6 +125,7 @@ export const checkSourceUpdates = async (
         ...(report!.reason ? { reason: report!.reason } : {}),
       });
     }
+    progress?.complete(results[results.length - 1]!);
   }
   return results;
 };

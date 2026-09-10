@@ -63,6 +63,15 @@ interface CheckReport {
 }
 
 export const check = async (options: CliOptions): Promise<void> => {
+  const progress = await ui.progress(!options.json);
+  try {
+    await runCheck(options, progress);
+  } finally {
+    progress.clear();
+  }
+};
+
+const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<void> => {
   const lock = readLockfile(options.targetRoot);
   if (!lock) {
     return fail(options, "no-lockfile", "No quiver.lock found. Run `quiver-cli init` first.");
@@ -94,8 +103,10 @@ export const check = async (options: CliOptions): Promise<void> => {
   loadEnvLocal(options.targetRoot);
   let local;
   try {
+    progress.update("Checking local files and provider configuration…");
     local = inspectLocalEntries(options.targetRoot, lock);
   } catch (error) {
+    progress.clear();
     return fail(options, "invalid-local-content", error instanceof Error ? error.message : String(error));
   }
   const { catalog } = local;
@@ -133,7 +144,10 @@ export const check = async (options: CliOptions): Promise<void> => {
         continue;
       }
       for (const requirement of cat.requires) {
+        progress.update(`Checking ${id} dependencies…`);
         const dependency = await checkDependency(id, requirement, !options.offline);
+        progress.clear();
+        if (!options.json) await reportDependency(dependency);
         pluginDependencies.push(dependency);
         if (dependency.status === "missing") pluginRequirements.push({ id, command: dependency.command });
       }
@@ -143,7 +157,10 @@ export const check = async (options: CliOptions): Promise<void> => {
   }
 
   // --- Provider shim drift (out-of-sync / missing / stale generated files) --
+  progress.update("Checking provider configuration…");
   const shimProblems = checkProviders(options.targetRoot, catalog, lock);
+  progress.clear();
+  if (!options.json) await ui.info("Local file and provider checks complete.");
 
   const mcpReports: McpReport[] = [];
   const disabled = disabledMcpServers(options.targetRoot);
@@ -172,6 +189,7 @@ export const check = async (options: CliOptions): Promise<void> => {
           ? "stdio server skipped (pass --introspect-stdio to run it)"
           : null;
     if (skipReason || acceptanceBlocked) {
+      if (!options.json && !skipReason) await ui.warn(`${id}: acceptance blocked by missing or unsafe local content`);
       mcpReports.push({
         id,
         status: "skipped",
@@ -182,6 +200,7 @@ export const check = async (options: CliOptions): Promise<void> => {
       continue;
     }
 
+    progress.update(`Checking ${id} tool snapshot…`);
     const server = interpolateEnvVars(catMcp.server);
     // OAuth-protected HTTP servers: reuse opencode's access token (read-only).
     const cred =
@@ -197,9 +216,11 @@ export const check = async (options: CliOptions): Promise<void> => {
     } catch (error) {
       res = { ok: false as const, reason: error instanceof Error ? error.message : String(error) };
     }
+    progress.clear();
     if (!res.ok) {
       if (accepting && res.authRequired) entry.authRequired = true;
       const reason = res.authRequired ? authHint(cred.status, p.name) : res.reason;
+      if (!options.json) await ui.warn(`${id}: ${reason}`);
       mcpReports.push({
         id,
         status: res.authRequired ? "skipped" : "error",
@@ -232,9 +253,20 @@ export const check = async (options: CliOptions): Promise<void> => {
     } else {
       mcpReports.push({ id, status: "drift", baseline, tokens, diff });
     }
+    if (!options.json) await ui.info(`${id}: ${accepting ? "snapshot checked (acceptance pending)" : mcpReports[mcpReports.length - 1]!.status}`);
   }
 
-  const sourceUpdates = await checkSourceUpdates(options, lock, [...selected].sort());
+  progress.clear();
+  const sourceWidth = Math.max(0, ...[...selected].map((id) => id.length));
+  if (!options.json && !options.offline && selected.size) ui.block(["Source updates:"]);
+  const sourceUpdates = await checkSourceUpdates(options, lock, [...selected].sort(), options.json || options.offline ? undefined : {
+    start: (id, completed, total) => progress.update(`Checking ${id} source… ${completed}/${total} complete`),
+    complete: (result) => {
+      progress.clear();
+      reportSourceUpdates([result], "item", sourceWidth);
+    },
+  });
+  progress.clear();
 
   if (accepting && selected.size) {
     try {
@@ -346,27 +378,12 @@ const report = async (
     await ui.warn(`MCP definitions changed since lockfile:\n  - ${configDrift.map((item) => item.id).join("\n  - ")}`);
   }
 
-  reportSourceUpdates(result.sourceUpdates);
-
-  for (const dependency of pluginDependencies) {
-    if (["missing", "incompatible", "unknown", "outdated"].includes(dependency.status)) {
-      await ui.warn(dependencyLabel(dependency));
-    } else {
-      await ui.info(dependencyLabel(dependency));
-    }
-  }
+  reportSourceUpdates(result.sourceUpdates, "summary");
 
   if (shimProblems.length) {
     await ui.warn(
       `Provider shims out of date:\n  - ${shimProblems.join("\n  - ")}`,
     );
-  }
-
-  const failed = mcpReports.filter(
-    (r) => r.status === "error" || (r.status === "skipped" && !r.intentional),
-  );
-  for (const r of failed) {
-    await ui.warn(`${r.id}: ${r.reason}`);
   }
 
   // Other skipped servers (e.g. stdio without --introspect-stdio) are the
@@ -414,7 +431,15 @@ const report = async (
   }
 };
 
-const reportSourceUpdates = (updates: SourceUpdateReport[]): void => {
+const reportDependency = async (dependency: DependencyReport): Promise<void> => {
+  if (["missing", "incompatible", "unknown", "outdated"].includes(dependency.status)) {
+    await ui.warn(dependencyLabel(dependency));
+  } else {
+    await ui.info(dependencyLabel(dependency));
+  }
+};
+
+const reportSourceUpdates = (updates: SourceUpdateReport[], mode: "item" | "summary", width = 0): void => {
   if (!updates.length) return;
   if (updates.every((item) => item.status === "skipped")) {
     ui.block(["Source updates: not checked (--offline)."]);
@@ -429,15 +454,18 @@ const reportSourceUpdates = (updates: SourceUpdateReport[]): void => {
     skipped: "Not checked (offline)",
     error: "Source check failed",
   };
-  const width = updates.reduce((max, item) => Math.max(max, item.id.length), 0);
-  const lines = ["Source updates:"];
-  for (const item of updates) {
+  const lines: string[] = [];
+  for (const item of mode === "item" ? updates : []) {
     const icon = item.status === "error" ? color.red("✖")
       : item.status === "legacy" || item.status === "update-available" ? color.yellow("⚠") : color.green("✔");
     lines.push(`  ${icon} ${item.id.padEnd(width)}   ${item.scope === "adapter" ? "Adapter: " : ""}${labels[item.status]}${item.localChanges ? " · local customizations preserved" : ""}`);
     if (item.reason && item.status !== "up-to-date" && item.status !== "pinned") {
       lines.push(...item.reason.split(/\r?\n/).map((line) => `    ${line}`));
     }
+  }
+  if (mode === "item") {
+    ui.block(lines);
+    return;
   }
   const available = updates.filter((item) => item.status === "update-available").length;
   const blocked = updates.filter((item) => item.blocked).length;

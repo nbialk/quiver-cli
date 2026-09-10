@@ -39,6 +39,7 @@ vi.mock("../src/ui/prompts.js", () => ({
   info: vi.fn(),
   success: vi.fn(),
   block: vi.fn(),
+  progress: vi.fn(async () => ({ update: vi.fn(), clear: vi.fn() })),
   palette: () => ({ cyan: (text: string) => text, dim: (text: string) => text }),
 }));
 
@@ -128,6 +129,30 @@ const projectState = () => {
 };
 
 const output = () => JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string);
+
+it("shows the active MCP check before its response arrives and clears progress on completion", async () => {
+  setup();
+  const progress = { update: vi.fn(), clear: vi.fn() };
+  vi.mocked(ui.progress).mockResolvedValueOnce(progress);
+  let release!: (result: Awaited<ReturnType<typeof introspect>>) => void;
+  vi.mocked(introspect).mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+  const pending = check(options({ json: false, positionals: ["mcp:alpha"] }));
+  await vi.waitFor(() => expect(progress.update).toHaveBeenCalledWith("Checking mcp:alpha tool snapshot…"));
+  expect(ui.success).not.toHaveBeenCalled();
+  release({ ok: true, tools: TOOLS });
+  await pending;
+  expect(ui.info).toHaveBeenCalledWith("mcp:alpha: ok");
+  expect(progress.clear).toHaveBeenCalled();
+});
+
+it("clears active progress on unexpected errors", async () => {
+  setup();
+  const progress = { update: vi.fn(), clear: vi.fn() };
+  vi.mocked(ui.progress).mockResolvedValueOnce(progress);
+  vi.mocked(checkProviders).mockImplementationOnce(() => { throw new Error("provider failure"); });
+  await expect(check(options({ json: false }))).rejects.toThrow("provider failure");
+  expect(progress.clear).toHaveBeenCalled();
+});
 
 beforeEach(() => {
   process.exitCode = 0;

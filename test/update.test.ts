@@ -203,6 +203,29 @@ const runCheck = async (overrides: Partial<CliOptions> = {}) => {
   return JSON.parse(vi.mocked(console.log).mock.calls[0]![0] as string);
 };
 
+it("streams completed sources while the next source is still pending", async () => {
+  await setupRemote(REMOTE, "alpha");
+  const second = "github:acme/other/skills/demo#main";
+  await setupRemote(second, "beta");
+  let release!: (result: ResolvedGithubDirectory) => void;
+  vi.mocked(resolveGithubDirectory)
+    .mockResolvedValueOnce(remoteSources.get(REMOTE)!)
+    .mockImplementationOnce(() => new Promise((resolve) => { release = resolve; }));
+  const pending = check(options({ json: false }));
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  const during = vi.mocked(ui.block).mock.calls.flatMap(([lines]) => lines).join("\n");
+  expect(during).toContain("skill:alpha");
+  expect(during).toContain("Source up to date");
+  expect(during).not.toContain("skill:beta");
+  expect(during).not.toContain("Source updates: 0 available");
+  release(remoteSources.get(second)!);
+  await pending;
+  const final = vi.mocked(ui.block).mock.calls.flatMap(([lines]) => lines).join("\n");
+  expect(final.match(/skill:alpha/g)).toHaveLength(1);
+  expect(final.match(/skill:beta/g)).toHaveLength(1);
+  expect(final).toContain("Source updates: 0 available · 2 up to date");
+});
+
 describe("combined check source updates", () => {
   it("matches update dry-run for skills, commands, plugin adapters and MCP definitions without modifying the project", async () => {
     await setup();

@@ -153,6 +153,36 @@ export interface Spinner {
   stop: (message: string) => void;
 }
 
+export interface Progress {
+  update: (message: string) => void;
+  clear: () => void;
+}
+
+// Transient progress on terminals, plain lines in CI/pipes, silent for JSON.
+export const progress = async (enabled: boolean): Promise<Progress> => {
+  if (!enabled) return { update: () => {}, clear: () => {} };
+  const clack = process.stdout.isTTY ? await loadClack() : null;
+  if (!clack) return {
+    update: (message) => console.log(`  ${message}`),
+    clear: () => {},
+  };
+  const pending = clack.spinner({ indicator: "timer", output: process.stdout });
+  let active = false;
+  return {
+    update: (message) => {
+      if (active) pending.message(message);
+      else {
+        pending.start(message);
+        active = true;
+      }
+    },
+    clear: () => {
+      if (active) pending.clear();
+      active = false;
+    },
+  };
+};
+
 export const spinner = async (): Promise<Spinner> => {
   const clack = await loadClack();
   if (clack) {
