@@ -44,6 +44,28 @@ describe("readFrontmatter", () => {
     const fm = readFrontmatter(`---\nname: x\nmeta:\n  nested: y\n---\n`);
     expect(fm).toEqual({ name: "x", meta: "" });
   });
+
+  it("reads metadata.version without promoting other nested fields", () => {
+    expect(readFrontmatter(`---\nname: prisma-cli\nmetadata:\n  author: prisma\n  version: "7.9.1"\n---`))
+      .toEqual({ name: "prisma-cli", metadata: "", version: "7.9.1" });
+  });
+
+  it.each([
+    `version: 4.3.1\nmetadata:\n  version: 1.0.0`,
+    `metadata:\n  version: 1.0.0\nversion: 4.3.1`,
+  ])("prefers top-level version regardless of field order", (fields) => {
+    expect(readFrontmatter(`---\n${fields}\n---`).version).toBe("4.3.1");
+  });
+
+  it("ignores versions outside direct metadata children", () => {
+    expect(readFrontmatter(`---\nmetadata:\n  author: demo\n  other:\n    version: 9\nconfig:\n  version: 8\n---`).version).toBeUndefined();
+  });
+
+  it.each([">", ">-", ">+", "|", "|-", "|+"])("reads descriptions with block marker %s", (marker) => {
+    const fm = readFrontmatter(`---\ndescription: ${marker}\n  First line\n  second line\nversion: 1\n---`);
+    expect(fm.description).toBe(marker.startsWith(">") ? "First line second line" : "First line\nsecond line");
+    expect(fm.version).toBe("1");
+  });
 });
 
 describe("digest", () => {
