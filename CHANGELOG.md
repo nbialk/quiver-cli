@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/nbialk/quiver-cli/compare/v2.1.0...v2.2.0) (2026-09-10)
+
+
+### Features
+
+* **plugins:** report dependency versions in list and update ([e88c4d0](https://github.com/nbialk/quiver-cli/commit/e88c4d0968f039c2c8360f9980d2f89ebd279207))
+
 ## [2.1.0](https://github.com/nbialk/quiver-cli/compare/v2.0.0...v2.1.0) (2026-09-10)
 
 
