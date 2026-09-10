@@ -3,6 +3,7 @@ import { resolveInstalledId } from "../cli.js";
 import { repoCatalogExists } from "../catalog/repo.js";
 import { readLockfile, requireV2Lockfile } from "../lockfile/io.js";
 import { writeProviders } from "../providers/write.js";
+import { checkDependency, dependencyLabel } from "../plugins/check.js";
 import * as ui from "../ui/prompts.js";
 import { installPreparedEntry } from "./install.js";
 import { inspectLocalEntries } from "./locksync.js";
@@ -44,7 +45,7 @@ const printReports = (reports: UpdateReport[], dryRun: boolean, providerError?: 
   if (providerError) lines.push("", `  ${color.red("✖")} Provider sync failed`, detail(providerError));
   if (!reports.length) lines.push("  No installed entries to update.");
   if (reports.some((item) => item.scope === "adapter")) {
-    lines.push("", "  Plugin statuses cover adapter sources. Check external binaries with `quiver-cli check`.");
+    lines.push("", "  Plugin statuses cover adapter sources; external dependency versions are reported separately.");
   }
 
   const count = (status: UpdateStatus): number => reports.filter((item) => item.status === status).length;
@@ -94,6 +95,11 @@ export const update = async (options: CliOptions): Promise<void> => {
     }
   }
   const by = (status: UpdateStatus): string[] => reports.filter((item) => item.status === status).map((item) => item.id);
+  const pluginDependencies = (await Promise.all(ids.map(async (id) => {
+    const entry = lock.entries[id];
+    if (entry?.type !== "plugin" || (lock.providers && !lock.providers.includes(entry.provider))) return [];
+    return Promise.all(entry.requires.map((requirement) => checkDependency(id, requirement, !options.offline)));
+  }))).flat();
   const errors = by("error");
   const blocked = [...by("local-changes"), ...by("legacy")];
   const ok = !errors.length && !blocked.length && !providerError;
@@ -101,10 +107,19 @@ export const update = async (options: CliOptions): Promise<void> => {
     console.log(JSON.stringify({
       ok, dryRun: options.dryRun, updated: by("updated"), upToDate: by("up-to-date"),
       pinned: by("pinned"), localChanges: by("local-changes"), legacy: by("legacy"),
-      errors, reports, ...(providerError ? { providerError } : {}),
+      errors, reports, pluginDependencies, ...(providerError ? { providerError } : {}),
     }, null, 2));
   } else {
     printReports(reports, options.dryRun, providerError);
+    for (const dependency of pluginDependencies) {
+      if (["missing", "incompatible", "unknown", "outdated"].includes(dependency.status)) {
+        await ui.warn(dependencyLabel(dependency));
+      } else {
+        await ui.info(dependencyLabel(dependency));
+      }
+    }
+    const outdated = pluginDependencies.filter((item) => item.freshness === "outdated").length;
+    if (outdated) await ui.info(`${outdated} dependency update${outdated === 1 ? "" : "s"} available; update external binaries with their own installer or package manager.`);
   }
   if (!ok) process.exitCode = errors.length || providerError ? 2 : 1;
 };

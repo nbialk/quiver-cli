@@ -11,6 +11,7 @@ import {
 } from "../lockfile/schema.js";
 import { formatTokens, sumTokens } from "../mcp/tokens.js";
 import { requirementLabel } from "../plugins/requirements.js";
+import { checkDependency, dependencyLabel } from "../plugins/check.js";
 import { disabledMcpServers } from "../providers/local-config.js";
 import * as ui from "../ui/prompts.js";
 
@@ -83,6 +84,10 @@ export const list = async (options: CliOptions): Promise<void> => {
   }
 
   const disabled = disabledMcpServers(options.targetRoot);
+  const dependencies = new Map(await Promise.all(plugins.map(async ({ name, entry }) => [
+    name,
+    await Promise.all(entry.requires.map((requirement) => checkDependency(`plugin:${name}`, requirement, false))),
+  ] as const)));
 
   if (options.json) {
     console.log(
@@ -111,6 +116,7 @@ export const list = async (options: CliOptions): Promise<void> => {
             source: entry.source,
             provider: entry.provider,
             requires: entry.requires,
+            dependencies: dependencies.get(name),
           })),
         },
         null,
@@ -210,6 +216,9 @@ export const list = async (options: CliOptions): Promise<void> => {
         ? `  ${c.dim(`requires: ${entry.requires.map(requirementLabel).join(", ")}`)}`
         : "";
       lines.push(`    ${name} ${c.dim(entry.provider)}${requires}`);
+      for (const dependency of dependencies.get(name) ?? []) {
+        lines.push(`      ${c.dim(dependencyLabel(dependency))}`);
+      }
       lines.push(`      ${c.dim(origin(entry.source))}`);
     }
   }

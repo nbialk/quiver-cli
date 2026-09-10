@@ -377,7 +377,7 @@ describe("update integration", () => {
     await update(options({ json: false }));
     const output = vi.mocked(ui.block).mock.calls.flatMap(([lines]) => lines).join("\n");
     expect(output).toContain("plugin:demo   Adapter: Up to date");
-    expect(output).toContain("Check external binaries with `quiver-cli check`");
+    expect(output).toContain("external dependency versions are reported separately");
     expect(process.exitCode).toBe(0);
   });
 

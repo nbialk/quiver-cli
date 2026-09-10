@@ -7,6 +7,8 @@ import { parse } from "../src/cli.js";
 import { loadCatalog, type CatalogConfig } from "../src/catalog/discover.js";
 import { pluginToEntry } from "../src/catalog/entries.js";
 import { check } from "../src/commands/check.js";
+import { list } from "../src/commands/list.js";
+import { update } from "../src/commands/update.js";
 import { emptyLockfile, readLockfile, writeLockfile } from "../src/lockfile/io.js";
 import { checkDependency, extractVersion } from "../src/plugins/check.js";
 import { validatePluginRequirements, type PluginRequirement, type VersionedRequirement } from "../src/plugins/requirements.js";
@@ -60,6 +62,29 @@ afterEach(() => {
 });
 
 describe("plugin dependency checking", () => {
+  it("lists installed dependency versions without a release request", async () => {
+    setup([requirement()]);
+    const { options } = parse(["list", "--json"]);
+    await list({ ...options, targetRoot: root });
+    const result = JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string);
+    expect(result.plugins[0].dependencies).toMatchObject([{ installedVersion: "0.27.2", freshness: "not-checked" }]);
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([[], ["--dry-run"]].map((flags) => ({ flags })))("reports dependency versions during update $flags", async ({ flags }) => {
+    setup([requirement()]);
+    const before = readFileSync(join(root, "quiver.lock"), "utf8");
+    vi.mocked(fetch).mockResolvedValue(new Response('{"tag_name":"v0.48.0"}'));
+    const { options } = parse(["update", "plugin:demo", "--json", ...flags]);
+    await update({ ...options, targetRoot: root });
+    const result = JSON.parse(vi.mocked(console.log).mock.calls.at(-1)![0] as string);
+    expect(result.pluginDependencies).toMatchObject([{
+      installedVersion: "0.27.2", latestVersion: "0.48.0", freshness: "outdated",
+    }]);
+    expect(fetch).toHaveBeenCalledExactlyOnceWith("https://api.github.com/repos/acme/rtk/releases/latest", expect.any(Object));
+    expect(readFileSync(join(root, "quiver.lock"), "utf8")).toBe(before);
+  });
+
   it("validates metadata at catalog, local inspection, and lockfile boundaries", async () => {
     const { config } = setup([command]);
     const invalid = [{ command, minVersion: "latest" }];
