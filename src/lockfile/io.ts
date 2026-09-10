@@ -12,6 +12,7 @@ import {
 import { isAbsolute, resolve, win32 } from "node:path";
 
 import { assertSafeMutationPath } from "../path.js";
+import { validatePluginRequirements } from "../plugins/requirements.js";
 import {
   LOCKFILE_NAME,
   LOCKFILE_VERSION,
@@ -226,12 +227,7 @@ const parseLockfile = (value: unknown): Lockfile => {
         if (entry.provider !== "opencode") {
           invalid(`${field}.provider`, 'must be "opencode"');
         }
-        if (
-          !Array.isArray(entry.requires) ||
-          entry.requires.some((item) => typeof item !== "string")
-        ) {
-          invalid(`${field}.requires`, "must be an array of strings");
-        }
+        validatePluginRequirements(entry.requires, `${field}.requires`);
         break;
       case "mcp":
         if (entry.transport !== "http" && entry.transport !== "stdio") {

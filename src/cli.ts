@@ -43,8 +43,8 @@ Commands:
   update [id]      Update installed entries from their own recorded sources
   list             Show installed entries, origins, and MCP tool counts
   inspect <name>   Show an MCP server's tools with descriptions and token cost
-  check [id]       Detect drift: skill digests, provider shims, MCP tool
-                   snapshots (--offline skips MCP re-introspection)
+  check [id]       Check local consistency and available source/dependency updates
+                   (--offline checks only local content and dependency versions)
   migrate          Migrate a V1 lockfile to V2 without fetching source content
   help             Show this help
   version          Show the quiver-cli version
@@ -59,7 +59,7 @@ Options:
   -V, --verbose        Show full tool lists and description diffs (check);
                        full tool descriptions (inspect)
   --accept             Accept local baselines; requires an id or --all (check)
-  --offline            Skip MCP re-introspection; check digests + shims only (check)
+  --offline            Skip network checks; still check local plugin versions (check)
   --dry-run            Report what would change without writing (update, migrate)
   --providers=a,b      Generate configs only for these tools (init, providers)
   --catalog=<source>   Catalog source for init (e.g. github:owner/repo[/path][#ref])

@@ -28,6 +28,9 @@ import { checkProviders, writeProviders } from "../src/providers/write.js";
 import * as ui from "../src/ui/prompts.js";
 
 vi.mock("../src/mcp/introspect.js", () => ({ introspect: vi.fn() }));
+// Source/update integration is covered in update.test.ts; this suite isolates
+// local integrity, baseline acceptance and MCP observations.
+vi.mock("../src/commands/update-plan.js", () => ({ checkSourceUpdates: vi.fn(async () => []) }));
 vi.mock("../src/mcp/opencode-auth.js", () => ({ findOpencodeToken: vi.fn() }));
 vi.mock("../src/providers/write.js", () => ({ checkProviders: vi.fn(), writeProviders: vi.fn() }));
 vi.mock("../src/ui/prompts.js", () => ({

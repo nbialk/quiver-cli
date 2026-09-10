@@ -1,3 +1,5 @@
+import type { PluginRequirement } from "../plugins/requirements.js";
+
 export const LOCKFILE_VERSION = 2 as const;
 export const LOCKFILE_NAME = "quiver.lock";
 export type LockfileVersion = 1 | typeof LOCKFILE_VERSION;
@@ -102,7 +104,7 @@ export interface PluginEntry {
   installedPath: string;
   source: EntrySource;
   digest: string;
-  requires: string[];
+  requires: PluginRequirement[];
 }
 
 export type LockEntry = SkillEntry | CommandEntry | McpEntry | PluginEntry;

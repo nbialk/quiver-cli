@@ -10,7 +10,7 @@ For existing V1 projects, follow the [upgrade guide](docs/v2.md#upgrading-an-exi
 
 - Commit `.agents/` and `quiver.lock`. They are the project's local source of truth.
 - Generate provider files with `sync`; do not edit or commit generated output.
-- Use `check` for local drift and MCP snapshots, and `update` for source changes.
+- Use `check` for local consistency and available updates, and `update` to apply source changes.
 - Catalog content lives in [quiver-catalog](https://github.com/nbialk/quiver-catalog),
   not in the CLI package.
 
@@ -104,6 +104,19 @@ clone can use its committed local files without reaching the catalog.
 Normal `check` is project-read-only. It compares content/config digests, provider
 files, plugin binary requirements and observed MCP tool descriptions/schemas
 against recorded baselines. It does not silently save a first MCP snapshot.
+It also checks every selected skill, command, plugin adapter and MCP definition
+against its recorded source, and queries configured external dependency releases.
+This uses the same source comparison as `update --dry-run`, without applying
+updates or advancing source pins. Source fetches may populate the download cache.
+
+Local integrity and source freshness are independent: an unchanged installation
+can have an update available, and a customized entry can have an upstream update
+that is blocked from automatic application. `check` compares upstream content to
+the pristine source baseline, so local edits alone are not reported as updates.
+Available updates are notices, not integrity failures. Source lookup failures
+produce a nonzero exit code and an incomplete check; legacy/unverified sources
+are explicitly unknown. Fixed commit pins are reported as pinned without looking
+for newer commits. Named refs continue to follow their exact branch or tag.
 
 ```bash
 quiver-cli check --json
@@ -114,12 +127,18 @@ quiver-cli check skill:cleanup --offline --accept
 quiver-cli check --all --accept        # explicit acceptance for all entries
 ```
 
+JSON `sourceUpdates` reports each selected source separately from local drift,
+including `update-available`, `up-to-date`, `pinned`, `legacy`, `skipped` or `error`,
+plus `localChanges` and `blocked` when applicable. Offline checks mark source
+updates as skipped and do not certify freshness.
+
 Acceptance updates only the selected local baseline and successfully observed
 MCP snapshots. It does **not** change the pristine source digest, prove source
 authenticity or approve later overwrites of accepted customizations. Missing or
 unsafe local artifacts cannot be accepted.
 
-`check --offline` performs no network access and runs no stdio MCP code. Skipped,
+`check --offline` skips all source and release lookups, performs no network access,
+and runs no stdio MCP code. Configured local dependency version probes still run. Skipped,
 missing-baseline or authentication-blocked MCP observations are reported as
 incomplete, not current. In JSON output, inspect `complete` as well as `ok`:
 an intentional offline skip can pass local checks without certifying live tools.
@@ -139,6 +158,10 @@ quiver-cli update --dry-run --json
 quiver-cli update skill:react-performance
 quiver-cli update skill:react-performance --source=github:acme/skills/react#stable --dry-run
 ```
+
+Use `quiver-cli check` for a combined installation health and update report.
+`update --dry-run` remains the exact application preview, including the effect of
+`--force` or an explicit `--source`; `update` applies the planned changes.
 
 `update [id]` resolves each installed entry's recorded source independently.
 Without an ID it considers all installed entries. A dry run writes nothing in
@@ -208,7 +231,70 @@ it no longer accepts `--providers`.
 `opencode` merges into `opencode.json`, `tui` becomes `.opencode/tui.json`,
 `claude.settings` becomes `.claude/settings.json`, and `shared` stays local.
 The catalog's `plugin:rtk` adapter requires RTK installed separately; `check`
-verifies its binary is on `PATH`.
+verifies its binary is on `PATH`. Plugin results from `update` explicitly refer
+to the **adapter source**, not the external binary. JSON update reports mark
+plugin entries with `"scope": "adapter"`.
+
+### Plugin Dependency Versions
+
+Plugin `requires` entries can remain strings (presence checks only), or use
+optional version metadata in the catalog or local `.agents/config.json`:
+
+```json
+{
+  "plugins": {
+    "rtk": {
+      "provider": "opencode",
+      "sourcePath": "plugins/opencode/rtk.ts",
+      "requires": [
+        {
+          "command": "rtk",
+          "versionArgs": ["--version"],
+          "minVersion": "0.27.2",
+          "latest": { "github": "rtk-ai/rtk" }
+        }
+      ]
+    }
+  }
+}
+```
+
+The minimum above is illustrative; choose the version your adapter actually
+requires. Object entries run the named executable from `PATH`, defaulting to
+`["--version"]` arguments, directly without a shell, with a five-second timeout
+and a 64 KiB output limit. Version output must contain a full semantic version;
+prereleases retain their SemVer ordering. `minVersion` and `latest` are optional.
+Strings such as `"requires": ["rtk"]` still perform only presence checks.
+Both forms are preserved in the lockfile, and `list` displays minimum versions.
+
+```bash
+quiver-cli check plugin:rtk --offline       # installed version + minimum, no release lookup
+quiver-cli check plugin:rtk                 # also compare against the latest GitHub release
+quiver-cli check --json
+```
+
+Normal `check` queries GitHub's latest published full release for configured
+repositories. `--offline` skips release and source lookups while still running
+configured local version probes. No extra update-check flag is needed.
+Quiver reports missing, incompatible, outdated, present/compatible and unknown
+states with installed and latest versions when available. A dependency marked
+outdated can still meet its configured minimum. Missing or incompatible binaries,
+failed version probes, and failed configured release lookups make `check` exit
+with code 1. Compatible-but-outdated binaries produce an update notice without
+failing the check. Unknown version observations mark the check incomplete.
+
+JSON `pluginDependencies` contains each dependency's `status`, `compatibility`,
+`freshness`, and observed versions; the existing `pluginRequirements` field
+continues to list missing executables. Unconfigured string requirements are
+explicitly presence-only; they do not certify a version or release freshness.
+Object requirements without `latest` still check versions and minimums, but
+explicitly report that release freshness was not checked.
+Lookup failures (including rate limits or non-semver release tags) are reported
+as unknown, never current. External binaries are never automatically installed
+or upgraded. After editing local metadata, review it and use
+`quiver-cli check plugin:rtk --offline --accept` to record the local baseline.
+
+### Local Provider Overrides
 
 `disable mcp:<name>` and `enable mcp:<name>` only change gitignored
 `.agents/config.local.json` and generated output. They preserve committed config,
@@ -235,7 +321,8 @@ provider files.
 
 Run `quiver-cli help` for command-specific flags. Value options require `=`,
 for example `--name=alias` or `--source=github:owner/repo/path#ref`. There is no
-`upstream` or `outdated` command; use `update --dry-run` for source changes.
+`upstream` or `outdated` command; use `check` to discover updates and
+`update --dry-run` to preview applying them.
 `version` reports the installed CLI version locally. Optional npm update notices
 after online install/update operations can be disabled with
 `QUIVER_NO_UPDATE_NOTIFIER=1`; local/offline commands do not trigger them.

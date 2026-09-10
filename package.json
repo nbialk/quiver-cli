@@ -28,10 +28,12 @@
     "@clack/prompts": "^1.8.0",
     "@iarna/toml": "^2.2.5",
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "semver": "^7.8.5",
     "tar": "^7.5.22"
   },
   "devDependencies": {
     "@types/node": "^22.20.1",
+    "@types/semver": "^7.8.0",
     "tsup": "^8.5.1",
     "typescript": "^7.0.2",
     "vitest": "^5.0.0"

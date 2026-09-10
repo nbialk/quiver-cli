@@ -37,6 +37,7 @@ let root: string;
 let repoDir: string;
 let catalogDir: string;
 const remoteSources = new Map<string, ResolvedGithubDirectory>();
+const stdoutTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
 
 const write = (base: string, path: string, content: string | Buffer): void => {
   fs.mkdirSync(dirname(join(base, path)), { recursive: true });
@@ -146,6 +147,9 @@ afterEach(() => {
     syncBuiltinESMExports();
     vi.clearAllMocks();
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+    if (stdoutTTY) Object.defineProperty(process.stdout, "isTTY", stdoutTTY);
+    else Reflect.deleteProperty(process.stdout, "isTTY");
     fs.rmSync(root, { recursive: true, force: true });
     remoteSources.clear();
     process.exitCode = 0;
@@ -191,7 +195,257 @@ const run = async (overrides: Partial<CliOptions> = {}): Promise<UpdateReport> =
   return JSON.parse(vi.mocked(console.log).mock.calls[0]![0] as string) as UpdateReport;
 };
 
+const runCheck = async (overrides: Partial<CliOptions> = {}) => {
+  process.exitCode = 0;
+  vi.mocked(console.log).mockClear();
+  await check(options(overrides));
+  expect(console.log).toHaveBeenCalledExactlyOnceWith(expect.any(String));
+  return JSON.parse(vi.mocked(console.log).mock.calls[0]![0] as string);
+};
+
+describe("combined check source updates", () => {
+  it("matches update dry-run for skills, commands, plugin adapters and MCP definitions without modifying the project", async () => {
+    await setup();
+    write(catalogDir, "commands/review.md", "Review v1\n");
+    write(catalogDir, "plugins/demo.ts", "export const v = 1;\n");
+    const config = {
+      plugins: { demo: { provider: "opencode", sourcePath: "plugins/demo.ts", requires: [] } },
+      mcpServers: { demo: { transport: "stdio", command: "quiver-never-execute" } },
+    };
+    write(catalogDir, "config.json", JSON.stringify(config));
+    const source = { source: `local:${catalogDir}`, root: catalogDir };
+    for (const id of ["command:review", "plugin:demo", "mcp:demo"]) {
+      install(await prepareCatalogEntry(source, loadCatalog(source), id));
+    }
+    await sync(options());
+    write(catalogDir, "skills/code/demo/SKILL.md", skill("v2"));
+    write(catalogDir, "commands/review.md", "Review v2\n");
+    write(catalogDir, "plugins/demo.ts", "export const v = 2;\n");
+    config.mcpServers.demo.command = "quiver-never-execute-v2";
+    write(catalogDir, "config.json", JSON.stringify(config));
+    const before = snapshot(repoDir);
+
+    const report = await runCheck();
+    const preview = await run({ dryRun: true });
+
+    expect(report.ok).toBe(true);
+    expect(report.skillDrift).toEqual([]);
+    expect(report.configDrift).toEqual([]);
+    expect(report.sourceUpdates.map((item: { id: string }) => item.id)).toEqual(["command:review", "mcp:demo", "plugin:demo", "skill:demo"]);
+    expect(report.sourceUpdates.filter((item: { status: string }) => item.status === "update-available").map((item: { id: string }) => item.id)).toEqual(preview.updated);
+    expect(report.sourceUpdates).toEqual(expect.arrayContaining([expect.objectContaining({ id: "plugin:demo", scope: "adapter" })]));
+    expect(report.sourceUpdates.every((item: { localChanges: boolean; blocked: boolean }) => !item.localChanges && !item.blocked)).toBe(true);
+    expect(snapshot(repoDir)).toEqual(before);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it.each([false, true])("separates accepted local customizations from upstream changes (new source=%s)", async (upstreamChanged) => {
+    const { sourceFile, skillPath } = await setup();
+    fs.writeFileSync(skillPath, skill("local customization"));
+    await sync(options());
+    await runCheck({ offline: true, accept: true, positionals: ["skill:demo"] });
+    if (upstreamChanged) fs.writeFileSync(sourceFile, skill("v2"));
+    const before = snapshot(repoDir);
+
+    const report = await runCheck();
+
+    expect(report).toMatchObject({ ok: true, complete: true, skillDrift: [], sourceUpdates: [{
+      id: "skill:demo", status: upstreamChanged ? "update-available" : "up-to-date",
+      localChanges: true, blocked: upstreamChanged,
+    }] });
+    expect(snapshot(repoDir)).toEqual(before);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("reports unaccepted local drift and available updates independently", async () => {
+    const { sourceFile, skillPath } = await setup();
+    await sync(options());
+    fs.writeFileSync(skillPath, skill("local customization"));
+    fs.writeFileSync(sourceFile, skill("v2"));
+    const report = await runCheck();
+    expect(report).toMatchObject({ ok: false, status: "drift", skillDrift: [{ id: "skill:demo" }], sourceUpdates: [{
+      id: "skill:demo", status: "update-available", localChanges: true, blocked: true,
+    }] });
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("does not mistake an unrelated repository commit for a source update", async () => {
+    const { directory } = await setupRemote();
+    await sync(options());
+    remote(REMOTE, directory, NEW_SHA);
+    const before = snapshot(repoDir);
+    expect(await runCheck()).toMatchObject({ ok: true, complete: true, sourceUpdates: [{ status: "up-to-date" }] });
+    expect(resolveGithubDirectory).toHaveBeenCalledExactlyOnceWith(REMOTE);
+    expect(snapshot(repoDir)).toEqual(before);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("reports fixed pins without fetching them or searching newer revisions", async () => {
+    await setupRemote(`github:acme/skills/Skills/Upstream#${OLD_SHA}`);
+    await sync(options());
+    const before = snapshot(repoDir);
+    expect(await runCheck()).toMatchObject({ ok: true, complete: true, sourceUpdates: [{ status: "pinned" }] });
+    expect(resolveGithubDirectory).not.toHaveBeenCalled();
+    expect(snapshot(repoDir)).toEqual(before);
+  });
+
+  it("performs no source fetching offline even if upstream has changed", async () => {
+    const { directory } = await setupRemote();
+    await sync(options());
+    fs.writeFileSync(join(directory, "SKILL.md"), skill("v2"));
+    remoteSources.clear();
+    const before = snapshot(repoDir);
+    expect(await runCheck({ offline: true })).toMatchObject({ ok: true, complete: true, sourceUpdates: [{ status: "skipped", reason: "offline" }] });
+    expect(resolveGithubDirectory).not.toHaveBeenCalled();
+    expect(snapshot(repoDir)).toEqual(before);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("reports source failures as incomplete while continuing to check other entries", async () => {
+    const { sourceFile } = await setup();
+    await setupRemote(REMOTE, "broken");
+    await sync(options());
+    fs.writeFileSync(sourceFile, skill("v2"));
+    remoteSources.clear();
+    const before = snapshot(repoDir);
+    expect(await runCheck()).toMatchObject({ ok: false, complete: false, status: "incomplete", sourceUpdates: [
+      { id: "skill:broken", status: "error", reason: expect.stringContaining("Source unavailable") },
+      { id: "skill:demo", status: "update-available" },
+    ] });
+    expect(snapshot(repoDir)).toEqual(before);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("marks legacy sources unknown without fetching or failing local integrity", async () => {
+    await setup();
+    const lock = readLockfile(repoDir)!;
+    lock.entries["skill:demo"]!.source = { kind: "legacy", catalog: lock.catalog };
+    writeLockfile(repoDir, lock);
+    await sync(options());
+    expect(await runCheck()).toMatchObject({ ok: true, complete: false, status: "incomplete", sourceUpdates: [{ status: "legacy" }] });
+    expect(resolveGithubDirectory).not.toHaveBeenCalled();
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("checks only the selected entry's source", async () => {
+    const { sourceFile } = await setup();
+    await setupRemote(REMOTE, "sibling");
+    await sync(options());
+    fs.writeFileSync(sourceFile, skill("v2"));
+    remoteSources.clear();
+    expect(await runCheck({ positionals: ["skill:demo"] })).toMatchObject({ ok: true, complete: true, sourceUpdates: [{ id: "skill:demo", status: "update-available" }] });
+    expect(resolveGithubDirectory).not.toHaveBeenCalled();
+  });
+
+  it("refuses acceptance if local files change during the source lookup", async () => {
+    const { skillPath } = await setupRemote();
+    await sync(options());
+    const lockBefore = fs.readFileSync(join(repoDir, "quiver.lock"), "utf8");
+    vi.mocked(resolveGithubDirectory).mockImplementationOnce(async () => {
+      fs.writeFileSync(skillPath, skill("edited during fetch"));
+      return remoteSources.get(REMOTE)!;
+    });
+    expect(await runCheck({ accept: true, positionals: ["skill:demo"] })).toMatchObject({ ok: false, error: "concurrent-change", accepted: [] });
+    expect(fs.readFileSync(join(repoDir, "quiver.lock"), "utf8")).toBe(lockBefore);
+    expect(process.exitCode).toBe(1);
+  });
+
+  it("renders available updates as notices alongside local consistency", async () => {
+    const { sourceFile } = await setup();
+    await sync(options());
+    fs.writeFileSync(sourceFile, skill("v2"));
+    await check(options({ json: false }));
+    const output = vi.mocked(ui.block).mock.calls.flatMap(([lines]) => lines).join("\n");
+    expect(output).toContain("skill:demo   Update available");
+    expect(output).toContain("Source updates: 1 available");
+    expect(output).toContain("Run `quiver-cli update`");
+    expect(ui.success).toHaveBeenCalledWith(expect.stringContaining("no drift detected"));
+    expect(process.exitCode).toBe(0);
+  });
+});
+
 describe("update integration", () => {
+  it("identifies plugin source status as adapter-only in text and JSON", async () => {
+    write(catalogDir, "plugins/demo.ts", "export {};\n");
+    write(catalogDir, "config.json", JSON.stringify({ plugins: {
+      demo: { provider: "opencode", sourcePath: "plugins/demo.ts", requires: ["quiver-missing-binary"] },
+    } }));
+    const source = { source: `local:${catalogDir}`, root: catalogDir };
+    install(await prepareCatalogEntry(source, loadCatalog(source), "plugin:demo"));
+
+    expect(await run()).toMatchObject({ ok: true, reports: [{ id: "plugin:demo", scope: "adapter", status: "up-to-date" }] });
+    await update(options({ json: false }));
+    const output = vi.mocked(ui.block).mock.calls.flatMap(([lines]) => lines).join("\n");
+    expect(output).toContain("plugin:demo   Adapter: Up to date");
+    expect(output).toContain("Check external binaries with `quiver-cli check`");
+    expect(process.exitCode).toBe(0);
+  });
+
+  it.each([
+    { tty: true, noColor: undefined, colored: true },
+    { tty: true, noColor: "1", colored: false },
+    { tty: false, noColor: undefined, colored: false },
+  ])("renders mixed outcomes with accurate totals (TTY=$tty, NO_COLOR=$noColor)", async ({ tty, noColor, colored }) => {
+    Object.defineProperty(process.stdout, "isTTY", { value: tty, configurable: true });
+    vi.stubEnv("NO_COLOR", noColor);
+    const { sourceFile } = await setup();
+    fs.writeFileSync(sourceFile, skill("v2"));
+    await setupRemote(REMOTE, "current");
+    await setupRemote(`github:acme/pinned/skill#${OLD_SHA}`, "pinned");
+    for (const name of ["legacy-a", "legacy-b", "modified", "broken"]) {
+      const source = `github:acme/${name}/skill#main`;
+      const fixture = await setupRemote(source, name);
+      if (name === "modified") fs.writeFileSync(fixture.skillPath, skill("local edits"));
+      if (name === "broken") remoteSources.delete(source);
+    }
+    const lock = readLockfile(repoDir)!;
+    for (const name of ["legacy-a", "legacy-b"]) {
+      lock.entries[`skill:${name}`]!.source = { kind: "legacy", catalog: lock.catalog };
+    }
+    writeLockfile(repoDir, lock);
+
+    await update(options({ json: false }));
+
+    const output = vi.mocked(ui.block).mock.calls.flatMap(([lines]) => lines).join("\n");
+    const paint = (code: number, icon: string) => colored ? `\x1b[${code}m${icon}\x1b[0m` : icon;
+    expect(output).toContain(`  ${paint(32, "✔")} skill:current    Up to date`);
+    expect(output).toContain(`  ${paint(32, "✔")} skill:demo       Updated`);
+    expect(output).toContain(`  ${paint(32, "✔")} skill:pinned     Pinned`);
+    expect(output).toContain(`  ${paint(33, "⚠")} skill:legacy-a   Legacy source`);
+    expect(output).toContain(`  ${paint(33, "⚠")} skill:modified   Local changes preserved`);
+    expect(output).toContain(`  ${paint(31, "✖")} skill:broken     Failed`);
+    expect(output).toContain("    Source unavailable: github:acme/broken/skill#main");
+    expect(output).toContain("skill:legacy-a, skill:legacy-b\n    Unverified V1 source.");
+    expect(output.match(/Select an explicit --source before updating\./g)).toHaveLength(1);
+    expect(output).toContain("Done: 1 updated · 1 up to date · 1 pinned · 3 needs attention · 1 failed");
+    if (!colored) expect(output).not.toContain("\x1b[");
+    expect(process.exitCode).toBe(2);
+  });
+
+  it("labels dry-run updates as available and preserves repository contents", async () => {
+    const { sourceFile } = await setup();
+    fs.writeFileSync(sourceFile, skill("v2"));
+    const before = snapshot(repoDir);
+
+    await update(options({ json: false, dryRun: true }));
+
+    const output = vi.mocked(ui.block).mock.calls.flatMap(([lines]) => lines).join("\n");
+    expect(output).toContain("Checking for updates (dry run)…");
+    expect(output).toContain("Update available");
+    expect(output).toContain("Dry run: 1 update available · 0 up to date · 0 needs attention · 0 failed");
+    expect(snapshot(repoDir)).toEqual(before);
+    expect(process.exitCode).toBe(0);
+  });
+
+  it("prints an empty-installation message and zero totals", async () => {
+    await update(options({ json: false }));
+
+    const output = vi.mocked(ui.block).mock.calls.flatMap(([lines]) => lines).join("\n");
+    expect(output).toContain("No installed entries to update.");
+    expect(output).toContain("Done: 0 updated · 0 up to date · 0 needs attention · 0 failed");
+    expect(process.exitCode).toBe(0);
+  });
+
   it("dry-runs without changing any repository bytes, paths or provider links", async () => {
     const { sourceFile } = await setup();
     await setupMcp();

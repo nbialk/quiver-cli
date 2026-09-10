@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { relative, resolve, win32 } from "node:path";
 
 import { resolveContainedPath } from "../path.js";
+import { validatePluginRequirements, type PluginRequirement } from "../plugins/requirements.js";
 import { fileDigest, jsonDigest, treeDigest } from "./digest.js";
 import { readFrontmatter } from "./frontmatter.js";
 import type { ResolvedCatalog } from "./resolve.js";
@@ -65,7 +66,7 @@ export interface CatalogConfig {
 export interface PluginConfig {
   provider: "opencode";
   sourcePath: string;
-  requires?: string[];
+  requires?: PluginRequirement[];
 }
 
 export interface CatalogSkill {
@@ -101,7 +102,7 @@ export interface CatalogPlugin {
   sourcePath: string;
   absPath: string;
   digest: string;
-  requires: string[];
+  requires: PluginRequirement[];
 }
 
 export interface Catalog {
@@ -217,6 +218,7 @@ const discoverPlugins = (root: string, config: CatalogConfig): CatalogPlugin[] =
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([name, plugin]) => {
       assertSafeEntryName(name, "plugin");
+      validatePluginRequirements(plugin.requires === undefined ? [] : plugin.requires, `Plugin "${name}".requires`);
       const absPath = resolveContainedPath(
         root,
         plugin.sourcePath,

@@ -31,6 +31,11 @@ vi.mock("../src/commands/update.js", () => ({
 }));
 
 describe("parse", () => {
+  it("checks online by default and uses offline as the single local-only switch", () => {
+    expect(parse(["check"])).toMatchObject({ options: { offline: false }, unknownFlags: [] });
+    expect(parse(["check", "--offline"])).toMatchObject({ options: { offline: true }, unknownFlags: [] });
+    expect(parse(["check", "--check-updates"]).unknownFlags).toEqual(["--check-updates"]);
+  });
   it("defaults to help with no args", () => {
     const { command, unknownFlags } = parse([]);
     expect(command).toBe("help");

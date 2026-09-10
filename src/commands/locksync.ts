@@ -6,6 +6,7 @@ import { validateMcpServer, type Catalog, type CatalogConfig } from "../catalog/
 import { readFrontmatter } from "../catalog/frontmatter.js";
 import { parseEntryId, type Lockfile } from "../lockfile/schema.js";
 import { assertSafeMutationPath, resolveContainedPath } from "../path.js";
+import { validatePluginRequirements } from "../plugins/requirements.js";
 
 export interface LocalDriftItem {
   id: string;
@@ -101,12 +102,11 @@ export const inspectLocalEntries = (targetRoot: string, lock: Lockfile) => {
           }
           if (
             resolveContainedPath(root, plugin.sourcePath, id) !== path ||
-            plugin.provider !== "opencode" ||
-            (plugin.requires !== undefined &&
-              (!Array.isArray(plugin.requires) || plugin.requires.some((cmd) => typeof cmd !== "string")))
+            plugin.provider !== "opencode"
           ) {
             throw new Error("Plugin definition does not match its installed path or is invalid");
           }
+          validatePluginRequirements(plugin.requires === undefined ? [] : plugin.requires, `Plugin "${name}".requires`);
           digest = jsonDigest({ config: plugin, content: digest });
           catalog.plugins.push({
             name,

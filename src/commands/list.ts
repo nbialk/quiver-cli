@@ -10,6 +10,7 @@ import {
   type SkillEntry,
 } from "../lockfile/schema.js";
 import { formatTokens, sumTokens } from "../mcp/tokens.js";
+import { requirementLabel } from "../plugins/requirements.js";
 import { disabledMcpServers } from "../providers/local-config.js";
 import * as ui from "../ui/prompts.js";
 
@@ -206,7 +207,7 @@ export const list = async (options: CliOptions): Promise<void> => {
     lines.push("", `  ${c.bold("plugins")}`);
     for (const { name, entry } of plugins) {
       const requires = entry.requires.length
-        ? `  ${c.dim(`requires: ${entry.requires.join(", ")}`)}`
+        ? `  ${c.dim(`requires: ${entry.requires.map(requirementLabel).join(", ")}`)}`
         : "";
       lines.push(`    ${name} ${c.dim(entry.provider)}${requires}`);
       lines.push(`      ${c.dim(origin(entry.source))}`);

@@ -1,30 +1,63 @@
 import type { CliOptions } from "../cli.js";
 import { resolveInstalledId } from "../cli.js";
-import { jsonDigest } from "../catalog/digest.js";
 import { repoCatalogExists } from "../catalog/repo.js";
 import { readLockfile, requireV2Lockfile } from "../lockfile/io.js";
-import type { EntrySource } from "../lockfile/schema.js";
 import { writeProviders } from "../providers/write.js";
-import { prepareEntryUpdate, type PreparedEntry } from "../sources/entry.js";
 import * as ui from "../ui/prompts.js";
-import { installedDigest, installPreparedEntry } from "./install.js";
+import { installPreparedEntry } from "./install.js";
 import { inspectLocalEntries } from "./locksync.js";
+import { planUpdates, type UpdateReport, type UpdateStatus } from "./update-plan.js";
 
-type UpdateStatus = "updated" | "up-to-date" | "pinned" | "local-changes" | "legacy" | "error";
-interface UpdateReport {
-  id: string;
-  status: UpdateStatus;
-  reason?: string;
-  from: EntrySource;
-  to?: EntrySource;
-  contentChanged?: boolean;
-}
+const printReports = (reports: UpdateReport[], dryRun: boolean, providerError?: string): void => {
+  const color = ui.palette();
+  const labels: Record<UpdateStatus, string> = {
+    updated: dryRun ? "Update available" : "Updated",
+    "up-to-date": "Up to date",
+    pinned: "Pinned",
+    "local-changes": "Local changes preserved",
+    legacy: "Legacy source",
+    error: "Failed",
+  };
+  const marker = (status: UpdateStatus): string => status === "error"
+    ? color.red("✖") : status === "legacy" || status === "local-changes"
+      ? color.yellow("⚠") : color.green("✔");
+  const width = reports.reduce((max, item) => Math.max(max, item.id.length), 0);
+  const reasons = new Map<string, UpdateReport[]>();
+  for (const item of reports) {
+    if (item.reason) {
+      const group = reasons.get(item.reason) ?? [];
+      group.push(item);
+      reasons.set(item.reason, group);
+    }
+  }
+  const detail = (reason: string): string => reason.split(/\r?\n/).map((line) => `    ${line}`).join("\n");
+  const lines: string[] = [];
+  for (const item of reports) {
+    lines.push(`  ${marker(item.status)} ${item.id.padEnd(width)}   ${item.scope === "adapter" ? "Adapter: " : ""}${labels[item.status]}`);
+    if (item.reason && reasons.get(item.reason)!.length === 1) lines.push(detail(item.reason));
+  }
+  for (const [reason, items] of reasons) {
+    if (items.length > 1) {
+      lines.push("", `  ${marker(items[0]!.status)} ${items.map((item) => item.id).join(", ")}`, detail(reason));
+    }
+  }
+  if (providerError) lines.push("", `  ${color.red("✖")} Provider sync failed`, detail(providerError));
+  if (!reports.length) lines.push("  No installed entries to update.");
+  if (reports.some((item) => item.scope === "adapter")) {
+    lines.push("", "  Plugin statuses cover adapter sources. Check external binaries with `quiver-cli check`.");
+  }
 
-const sourceIdentity = (source: EntrySource): string => {
-  if (source.kind === "legacy") return jsonDigest(source);
-  const { digest: _digest, ...identity } = source;
-  if ("commit" in identity) delete (identity as { commit?: string }).commit;
-  return jsonDigest(identity);
+  const count = (status: UpdateStatus): number => reports.filter((item) => item.status === status).length;
+  const summary = [
+    `${count("updated")} ${dryRun ? `update${count("updated") === 1 ? "" : "s"} available` : "updated"}`,
+    `${count("up-to-date")} up to date`,
+    ...(count("pinned") ? [`${count("pinned")} pinned`] : []),
+    `${count("legacy") + count("local-changes")} needs attention`,
+    `${count("error")} failed`,
+    ...(providerError ? ["provider sync failed"] : []),
+  ];
+  lines.push("", `${dryRun ? "Dry run" : "Done"}: ${summary.join(" · ")}`);
+  ui.block(lines);
 };
 
 export const update = async (options: CliOptions): Promise<void> => {
@@ -37,55 +70,8 @@ export const update = async (options: CliOptions): Promise<void> => {
   }
   const ids = options.positionals[0]
     ? [resolveInstalledId(options.positionals[0], lock)] : Object.keys(lock.entries).sort();
-  const reports: UpdateReport[] = [];
-  const pending: { prepared: PreparedEntry; digest: string; report: UpdateReport }[] = [];
-
-  for (const id of ids) {
-    const entry = lock.entries[id]!;
-    const report: UpdateReport = { id, status: "up-to-date", from: entry.source };
-    reports.push(report);
-    try {
-      const local = installedDigest(options.targetRoot, id, entry, lock);
-      if (entry.source.kind === "legacy" && !options.source) {
-        report.status = "legacy";
-        report.reason = "Unverified V1 source. Select an explicit --source before updating.";
-        continue;
-      }
-      const prepared = await prepareEntryUpdate(id, entry, options.source ?? undefined);
-      const candidate = prepared.entry;
-      const digest = candidate.type === "mcp" ? candidate.configDigest : candidate.digest;
-      report.to = candidate.source;
-      report.contentChanged = local !== digest;
-      const baseline = entry.type === "mcp" ? entry.configDigest : entry.digest;
-      const pristine = entry.source.kind === "legacy" ? null : entry.source.digest;
-      const modified = local !== baseline || pristine === null || local !== pristine;
-      // An explicit source binding to identical bytes is metadata-only; it
-      // neither discards local content nor claims a historical import event.
-      if (modified && !options.force && !(options.source && local === digest)) {
-        report.status = "local-changes";
-        report.reason = "Local or accepted customizations preserved. Review before using --force.";
-        continue;
-      }
-      const sourceChanged = sourceIdentity(entry.source) !== sourceIdentity(candidate.source);
-      if (local === digest && !sourceChanged && baseline === digest && pristine === digest) {
-        report.status = entry.source.kind === "github" && /^[a-f0-9]{40}$/i.test(entry.source.ref ?? "")
-          ? "pinned" : "up-to-date";
-        // A repository-only commit change is not an artifact update.
-        delete report.to;
-        continue;
-      }
-      if (candidate.type === "mcp" && entry.type === "mcp" && entry.configDigest === digest) {
-        candidate.tools = entry.tools;
-        candidate.toolsFetchedAt = entry.toolsFetchedAt;
-        if (entry.authRequired !== undefined) candidate.authRequired = entry.authRequired;
-      }
-      report.status = "updated";
-      pending.push({ prepared, digest: local, report });
-    } catch (error) {
-      report.status = "error";
-      report.reason = error instanceof Error ? error.message : String(error);
-    }
-  }
+  if (!options.json) ui.block([options.dryRun ? "Checking for updates (dry run)…" : "Updating installed components…", ""]);
+  const { reports, pending } = await planUpdates(options, lock, ids);
 
   let contentApplied = false;
   if (!options.dryRun) {
@@ -118,9 +104,7 @@ export const update = async (options: CliOptions): Promise<void> => {
       errors, reports, ...(providerError ? { providerError } : {}),
     }, null, 2));
   } else {
-    ui.block(reports.map((item) => `${item.id}: ${item.status === "updated" && options.dryRun ? "update available" : item.status}${item.reason ? ` (${item.reason})` : ""}`));
-    if (providerError) await ui.error(providerError);
-    if (!reports.length) await ui.info("No installed entries to update.");
+    printReports(reports, options.dryRun, providerError);
   }
   if (!ok) process.exitCode = errors.length || providerError ? 2 : 1;
 };

@@ -44,6 +44,13 @@ blocked observations remain incomplete rather than certifying current tools.
 Stdio introspection executes foreign code and requires `--introspect-stdio`.
 `check --offline` skips live introspection, accesses no network and executes no
 stdio MCP server. `init --empty` and `sync` also need no source network access.
+Plugin requirements with version metadata run the installed executable's
+configured version arguments directly (no shell), including during offline
+checks. String requirements only check executable presence. Dependency release
+lookups run during normal `check` when configured; they never install or upgrade
+binaries. Normal checks also fetch assigned sources to detect updates, possibly
+populating caches, without replacing project content or advancing source pins.
+`--offline` disables both source and dependency release lookups.
 
 Installation uses per-entry staging and rollback for handled I/O failures, not
 a global or crash-atomic transaction. Successful entries remain locked after

@@ -1,6 +1,3 @@
-import { accessSync, constants } from "node:fs";
-import { delimiter, resolve } from "node:path";
-
 import type { CliOptions } from "../cli.js";
 import { jsonDigest } from "../catalog/digest.js";
 import { repoCatalogExists } from "../catalog/repo.js";
@@ -16,6 +13,7 @@ import { introspect } from "../mcp/introspect.js";
 import { findOpencodeToken } from "../mcp/opencode-auth.js";
 import { toSnapshot } from "../mcp/snapshot.js";
 import { assertSafeMutationPath } from "../path.js";
+import { checkDependency, dependencyLabel, type DependencyReport } from "../plugins/check.js";
 import { disabledMcpServers } from "../providers/local-config.js";
 import { checkProviders } from "../providers/write.js";
 import { interpolateEnvVars, loadEnvLocal } from "../secrets/interpolate.js";
@@ -26,6 +24,9 @@ import {
   type LocalDriftItem,
   type LocalIssue,
 } from "./locksync.js";
+import { checkSourceUpdates, type SourceUpdateReport } from "./update-plan.js";
+
+export { hasCommand } from "../plugins/check.js";
 
 interface PluginRequirementIssue {
   id: string;
@@ -55,6 +56,8 @@ interface CheckReport {
   accepted: string[];
   acceptanceBlocked: boolean;
   pluginRequirements: PluginRequirementIssue[];
+  pluginDependencies: DependencyReport[];
+  sourceUpdates: SourceUpdateReport[];
   shims: string[];
   mcp: McpReport[];
 }
@@ -111,6 +114,7 @@ export const check = async (options: CliOptions): Promise<void> => {
   const pluginByName = new Map(catalog.plugins.map((p) => [p.name, p]));
   const mcpByName = new Map(catalog.mcp.map((m) => [m.name, m]));
   const pluginRequirements: PluginRequirementIssue[] = [];
+  const pluginDependencies: DependencyReport[] = [];
   const checked = { skills: 0, commands: 0, mcp: 0, plugins: 0 };
 
   for (const id of selected) {
@@ -128,8 +132,10 @@ export const check = async (options: CliOptions): Promise<void> => {
       if (lock.providers?.length && !lock.providers.includes(cat.provider)) {
         continue;
       }
-      for (const command of cat.requires) {
-        if (!hasCommand(command)) pluginRequirements.push({ id, command });
+      for (const requirement of cat.requires) {
+        const dependency = await checkDependency(id, requirement, !options.offline);
+        pluginDependencies.push(dependency);
+        if (dependency.status === "missing") pluginRequirements.push({ id, command: dependency.command });
       }
     } else if (mcpByName.has(p.name)) {
       checked.mcp += 1;
@@ -228,6 +234,8 @@ export const check = async (options: CliOptions): Promise<void> => {
     }
   }
 
+  const sourceUpdates = await checkSourceUpdates(options, lock, [...selected].sort());
+
   if (accepting && selected.size) {
     try {
       assertSafeMutationPath(options.targetRoot, lockfilePath(options.targetRoot), "Lockfile");
@@ -255,13 +263,18 @@ export const check = async (options: CliOptions): Promise<void> => {
     skillDrift.length > 0 ||
     configDrift.length > 0 ||
     pluginRequirements.length > 0 ||
+    pluginDependencies.some((item) => item.status === "incompatible") ||
     shimProblems.length > 0 ||
     mcpReports.some((r) => r.status === "drift");
   const complete =
     missing.length === 0 && unsafe.length === 0 &&
+    pluginDependencies.every((item) => item.status !== "unknown" && item.freshness !== "unknown") &&
+    sourceUpdates.every((item) => item.status !== "error" && item.status !== "legacy") &&
     mcpReports.every((r) => r.status === "ok" || r.status === "drift" || r.status === "accepted");
   const hasProblems =
     hasDrift || missing.length > 0 || unsafe.length > 0 ||
+    pluginDependencies.some((item) => item.status === "unknown") ||
+    sourceUpdates.some((item) => item.status === "error") ||
     mcpReports.some((r) =>
       r.status === "error" || r.status === "missing-baseline" ||
       (r.status === "skipped" && !r.intentional));
@@ -277,6 +290,8 @@ export const check = async (options: CliOptions): Promise<void> => {
     accepted,
     acceptanceBlocked,
     pluginRequirements,
+    pluginDependencies,
+    sourceUpdates,
     shims: shimProblems,
     mcp: mcpReports,
   };
@@ -303,7 +318,7 @@ const report = async (
   const {
     skillDrift,
     configDrift,
-    pluginRequirements,
+    pluginDependencies,
     shims: shimProblems,
     mcp: mcpReports,
     checked,
@@ -331,12 +346,14 @@ const report = async (
     await ui.warn(`MCP definitions changed since lockfile:\n  - ${configDrift.map((item) => item.id).join("\n  - ")}`);
   }
 
-  if (pluginRequirements.length) {
-    await ui.warn(
-      `Plugin requirements missing:\n  - ${pluginRequirements
-        .map((issue) => `${issue.id}: ${issue.command}`)
-        .join("\n  - ")}`,
-    );
+  reportSourceUpdates(result.sourceUpdates);
+
+  for (const dependency of pluginDependencies) {
+    if (["missing", "incompatible", "unknown", "outdated"].includes(dependency.status)) {
+      await ui.warn(dependencyLabel(dependency));
+    } else {
+      await ui.info(dependencyLabel(dependency));
+    }
   }
 
   if (shimProblems.length) {
@@ -385,6 +402,8 @@ const report = async (
   }
 
   const summary = summarize(checked);
+  const outdated = pluginDependencies.filter((item) => item.freshness === "outdated").length;
+  if (outdated) await ui.info(`${outdated} dependency update${outdated === 1 ? "" : "s"} available; update external binaries with their own installer or package manager.`);
   if (result.ok && result.complete) {
     await ui.success(`check passed: ${summary}, no drift detected.`);
   } else {
@@ -393,6 +412,39 @@ const report = async (
       await recommend([...skillDrift, ...configDrift], shimProblems, drifted);
     }
   }
+};
+
+const reportSourceUpdates = (updates: SourceUpdateReport[]): void => {
+  if (!updates.length) return;
+  if (updates.every((item) => item.status === "skipped")) {
+    ui.block(["Source updates: not checked (--offline)."]);
+    return;
+  }
+  const color = ui.palette();
+  const labels: Record<SourceUpdateReport["status"], string> = {
+    "up-to-date": "Source up to date",
+    "update-available": "Update available",
+    pinned: "Pinned to a fixed commit",
+    legacy: "Unknown (legacy source)",
+    skipped: "Not checked (offline)",
+    error: "Source check failed",
+  };
+  const width = updates.reduce((max, item) => Math.max(max, item.id.length), 0);
+  const lines = ["Source updates:"];
+  for (const item of updates) {
+    const icon = item.status === "error" ? color.red("✖")
+      : item.status === "legacy" || item.status === "update-available" ? color.yellow("⚠") : color.green("✔");
+    lines.push(`  ${icon} ${item.id.padEnd(width)}   ${item.scope === "adapter" ? "Adapter: " : ""}${labels[item.status]}${item.localChanges ? " · local customizations preserved" : ""}`);
+    if (item.reason && item.status !== "up-to-date" && item.status !== "pinned") {
+      lines.push(...item.reason.split(/\r?\n/).map((line) => `    ${line}`));
+    }
+  }
+  const available = updates.filter((item) => item.status === "update-available").length;
+  const blocked = updates.filter((item) => item.blocked).length;
+  lines.push(`Source updates: ${available} available · ${updates.filter((item) => item.status === "up-to-date").length} up to date · ${updates.filter((item) => item.status === "pinned").length} pinned · ${updates.filter((item) => item.status === "legacy" || item.status === "error").length} unknown`);
+  if (available) lines.push("Run `quiver-cli update` to apply source updates, or `quiver-cli update --dry-run` to preview application.");
+  if (blocked) lines.push(`${blocked} update${blocked === 1 ? " is" : "s are"} blocked by local customizations; review before using --force.`);
+  ui.block(lines);
 };
 
 // Render the body of a tool-drift warning. Long lists are summarized with a
@@ -483,24 +535,6 @@ export const authHint = (
   if (cred === "expired") return `OAuth token expired — re-${reauth}`;
   if (cred === "ok") return `OAuth token rejected — re-${reauth}`;
   return `requires OAuth — ${reauth}`;
-};
-
-export const hasCommand = (command: string): boolean => {
-  if (!/^[A-Za-z0-9._-]+$/.test(command)) return false;
-  const extensions = process.platform === "win32"
-    ? (process.env["PATHEXT"] ?? ".EXE;.CMD;.BAT;.COM").split(";")
-    : [""];
-  for (const dir of (process.env["PATH"] ?? "").split(delimiter)) {
-    for (const extension of extensions) {
-      try {
-        accessSync(resolve(dir, command + extension), constants.X_OK);
-        return true;
-      } catch {
-        // Try the next PATH entry.
-      }
-    }
-  }
-  return false;
 };
 
 const truncate = (s: string, max = 120): string =>

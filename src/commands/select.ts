@@ -1,5 +1,6 @@
 import type { Catalog } from "../catalog/discover.js";
 import type { Provider } from "../lockfile/schema.js";
+import { requirementLabel } from "../plugins/requirements.js";
 import * as ui from "../ui/prompts.js";
 
 const DEFAULT_SKILLS = ["find-skills", "skill-creator"];
@@ -149,7 +150,7 @@ export const selectFromCatalog = async (
               value: plugin.name,
               label: plugin.name,
               hint: plugin.requires.length
-                ? `requires: ${plugin.requires.join(", ")}`
+                ? `requires: ${plugin.requires.map(requirementLabel).join(", ")}`
                 : undefined,
             })),
           },
