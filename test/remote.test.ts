@@ -317,7 +317,7 @@ describe("resolveGithubDirectory", () => {
       .rejects.toThrow(/directory not found/);
   });
 
-  it("allows links outside the selection but rejects linked selected trees", async () => {
+  it("materializes internal links but rejects a symlink as the selected root", async () => {
     vi.mocked(downloadTarball).mockImplementationOnce(async (_repo, _sha, dest) => {
       mkdirSync(join(dest, "safe"));
       writeFileSync(join(dest, "safe/SKILL.md"), "# Safe\n");
@@ -326,7 +326,8 @@ describe("resolveGithubDirectory", () => {
     });
     await resolveGithubDirectory("github:acme/skills/safe", { pinnedSha: SHA });
     await expect(resolveGithubDirectory("github:acme/skills/alias", { pinnedSha: SHA })).rejects.toThrow(/symlinked parent/);
-    await expect(resolveGithubDirectory("github:acme/skills", { pinnedSha: SHA })).rejects.toThrow(/Unsafe tree entry/);
+    const result = await resolveGithubDirectory("github:acme/skills", { pinnedSha: SHA });
+    expect(readFileSync(join(result.root, "alias/SKILL.md"), "utf8")).toBe("# Safe\n");
     expect(downloadTarball).toHaveBeenCalledTimes(1);
   });
 

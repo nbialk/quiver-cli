@@ -24,6 +24,7 @@ import {
   resolveCommitSha,
 } from "../github/api.js";
 import { assertSafeMutationPath } from "../path.js";
+import { materializeTree } from "./materialize.js";
 
 export interface GithubSpec {
   repo: string;
@@ -234,13 +235,38 @@ export const resolveGithubDirectory = async (
   }
 
   const tree = resolve(cacheDir, "tree");
-  const root = resolve(tree, spec.path);
+  let root = resolve(tree, spec.path);
   assertSafeMutationPath(tree, root, "GitHub source directory");
   if (!lstatSync(root, { throwIfNoEntry: false })?.isDirectory()) {
     throw new Error(
       `GitHub source directory not found in ${spec.repo}@${sha}: ${spec.path || "."}`,
     );
   }
-  treeDigest(root);
+  try {
+    treeDigest(root);
+  } catch {
+    // Keep the authenticated raw cache intact. Publish a separate, link-free
+    // projection keyed by its content, so downstream digests/copies stay strict.
+    const staging = mkdtempSync(resolve(cacheDir, "materialized.tmp-"));
+    try {
+      const selected = resolve(staging, "tree");
+      materializeTree(tree, root, selected);
+      const digest = treeDigest(selected);
+      const projected = resolve(cacheDir, `materialized-${digest.replace(":", "-")}`);
+      assertSafeMutationPath(cacheDir, projected, "Materialized GitHub source");
+      if (lstatSync(projected, { throwIfNoEntry: false })) {
+        if (treeDigest(projected) !== digest) throw new Error("Corrupt materialized GitHub source");
+      } else {
+        try {
+          renameSync(selected, projected);
+        } catch (error) {
+          if (treeDigest(projected) !== digest) throw error;
+        }
+      }
+      root = projected;
+    } finally {
+      rmSync(staging, { recursive: true, force: true });
+    }
+  }
   return { source, root, ...spec, resolved: sha, fetchedAt: manifest.fetchedAt };
 };
