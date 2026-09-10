@@ -1,6 +1,6 @@
 {
   "name": "quiver-cli",
-  "version": "2.2.0",
+  "version": "2.3.0",
   "description": "Install agent skills from direct GitHub sources, plus custom skills, commands, plugins and MCP servers from catalogs, as native configs for opencode, Claude Code and Codex with per-entry source pins and drift checks.",
   "type": "module",
   "bin": {
