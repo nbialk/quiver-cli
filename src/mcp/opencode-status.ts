@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { realpathSync } from "node:fs";
 
-// OpenCode 2.3.2 GET /api/mcp exposes status, not tools/list. Query once per
+// OpenCode 2.3.2 GET /api/mcp exposes status by name, without URLs or schemas. Query once per
 // project, only with opt-in: opening a location can start plugins and servers.
 export const readOpencodeStatuses = (root: string): Map<string, string> => {
   const statuses = new Map<string, string>();

@@ -247,7 +247,7 @@ export const list = async (options: CliOptions): Promise<void> => {
   for (const name of needsAuth) {
     lines.push(
       `  ${c.yellow(`${name} requires OAuth`)} ${c.dim(
-        `— check V2 connection with 'quiver-cli check mcp:${name} --opencode-status'; V1: 'opencode mcp auth ${name}'`,
+        `— check the same-named V2 project entry with 'quiver-cli check mcp:${name} --opencode-status'; V1: 'opencode mcp auth ${name}'`,
       )}`,
     );
   }

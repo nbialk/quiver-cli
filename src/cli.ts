@@ -68,8 +68,8 @@ Options:
                        github:owner/repo[/path][#ref] or local:/absolute/path
   --name=<alias>       Set the installed name for a direct GitHub add
   --introspect-stdio   Allow introspecting stdio MCP servers (runs foreign code)
-  --opencode-status    On HTTP auth failure, query OpenCode V2 project status
-                       (may start project plugins and MCP servers)
+  --opencode-status    On HTTP auth failure, query the same-named OpenCode V2 entry
+                       (URL unverified; may start project plugins and MCP servers)
   -h, --help           Show help without running a command
   -v, --version        Show the quiver-cli version
 

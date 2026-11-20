@@ -283,10 +283,15 @@ describe("check", () => {
     vi.mocked(readOpencodeStatuses).mockReturnValue(new Map(status ? [["alpha", status]] : []));
     await check(options({ positionals: ["mcp:alpha"], accept: true, opencodeStatus: true }));
     expect(output()).toMatchObject({ complete: false, accepted: [], mcp: [{ baseline: "present", status: "skipped" }] });
-    const reason = output().mcp[0].reason;
-    if (status === "connected") expect(reason).toContain("Connected in OpenCode V2");
-    if (status === "needs_auth") expect(reason).toContain("sign in");
-    else expect(reason).not.toMatch(/sign in|mcp auth/);
+    const report = output().mcp[0];
+    expect(report.opencodeStatus).toEqual({ sameNameStatus: status ?? null, endpointVerified: false });
+    expect(report).not.toHaveProperty("authRequired");
+    expect(report.reason).toContain("same-named OpenCode entry");
+    if (status) {
+      expect(report.reason).toContain(`reports '${status}'`);
+      expect(report.reason).toContain("endpoint is unverified");
+    }
+    expect(report.reason).not.toMatch(/sign in|mcp auth/);
     expect(lockfile.readLockfile(repoDir)!.entries["mcp:alpha"]).toEqual(prior);
   });
 

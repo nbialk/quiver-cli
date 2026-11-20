@@ -148,12 +148,15 @@ failure produces a nonzero exit code.
 Stdio introspection requires `--introspect-stdio`, which permits running foreign
 code. For OAuth-protected HTTP servers, Quiver can reuse OpenCode V1 credentials
 read-only; it does not refresh them (`opencode mcp auth <name>` on V1).
-On V2, `check mcp:<name> --opencode-status` can distinguish a connected server
-from one needing sign-in after direct HTTP authorization fails. This opts into
-opening the project in OpenCode, which may start plugins and local MCP servers.
-Sign in via `/mcps` only if OpenCode reports authentication is needed. OpenCode
-2.3.2 exposes connection status, not tool schemas: status alone leaves the
-snapshot incomplete and cannot replace a baseline, even with `--accept`. `inspect <name>` shows
+After direct HTTP authorization fails, `check mcp:<name> --opencode-status`
+reads the status of the same-named entry in the OpenCode V2 project. This opts
+into opening the project, which may start plugins and local MCP servers.
+OpenCode 2.3.2 returns neither the entry’s URL nor its tool schemas. A
+`connected` or `needs_auth` status may therefore describe a different endpoint.
+Compare the configured URLs before acting on that status. JSON reports expose
+`opencodeStatus.sameNameStatus` (`null` if unavailable) and
+`opencodeStatus.endpointVerified: false`. Status alone leaves the snapshot
+incomplete and cannot replace a baseline, even with `--accept`. `inspect <name>` shows
 recorded MCP tools, descriptions and estimated token cost without a source fetch.
 
 ## Source Updates

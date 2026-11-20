@@ -41,7 +41,7 @@ interface McpReport {
   intentional?: boolean;
   reason?: string;
   authRequired?: boolean;
-  opencodeStatus?: string;
+  opencodeStatus?: { sameNameStatus: string | null; endpointVerified: false };
   diff?: ToolDiff;
   tokens?: number;
 }
@@ -227,11 +227,10 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
       if (options.opencodeStatus && server.transport === "http" && res.authRequired) {
         statuses ??= readOpencodeStatuses(options.targetRoot);
         const status = statuses.get(p.name);
-        const reason = status === "connected"
-          ? "Connected in OpenCode V2; its public MCP API does not expose tool schemas. Snapshot incomplete."
-          : status === "needs_auth"
-            ? `OpenCode V2 needs authentication: open /mcps and sign in to ${p.name}. Snapshot incomplete.`
-            : "Direct HTTP authorization rejected; no confirmed OpenCode connection or login requirement. Snapshot incomplete.";
+        const reason = status
+          ? `The same-named OpenCode entry in this project reports '${status}'. ` +
+            "The status API does not return its URL or tool schemas; the endpoint is unverified and the snapshot is incomplete."
+          : "Direct HTTP authorization rejected. No status was available for a same-named OpenCode entry in this project. Snapshot incomplete.";
         if (accepting) {
           // Do not pair an old tool baseline with a newly accepted config.
           accepted.delete(id);
@@ -239,9 +238,9 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
         }
         if (!options.json) await ui.warn(`${id}: ${reason}`);
         mcpReports.push({
-          id, status: "skipped", intentional: false, reason, opencodeStatus: status ?? "unknown",
+          id, status: "skipped", intentional: false, reason,
+          opencodeStatus: { sameNameStatus: status ?? null, endpointVerified: false },
           baseline: entry.tools ? "present" : "missing",
-          ...(status === "needs_auth" ? { authRequired: true } : {}),
         });
         continue;
       }
@@ -589,7 +588,7 @@ export const authHint = (
   name: string,
 ): string => {
   const detail = cred === "expired" ? "V1 OAuth token expired" : cred === "ok" ? "V1 OAuth token rejected" : "Direct HTTP authorization rejected";
-  return `${detail}. On V2 use --opencode-status to check the project connection; on V1 use 'opencode mcp auth ${name}'.`;
+  return `${detail}. On V2 use --opencode-status to check the same-named project entry; on V1 use 'opencode mcp auth ${name}'.`;
 };
 
 const truncate = (s: string, max = 120): string =>
