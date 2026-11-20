@@ -134,7 +134,7 @@ export const inspect = async (options: CliOptions): Promise<void> => {
     if (mcpEntry.authRequired) {
       lines.push(
         `  ${c.yellow(`${name} requires OAuth`)} ${c.dim(
-          `— run 'opencode mcp auth ${name}', then 'quiver-cli check'`,
+          `— check the same-named V2 project entry with 'quiver-cli check mcp:${name} --opencode-status'; V1: 'opencode mcp auth ${name}'`,
         )}`,
       );
     } else {

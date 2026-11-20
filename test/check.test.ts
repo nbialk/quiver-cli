@@ -23,10 +23,12 @@ import { authHint, check, hasCommand, summarize } from "../src/commands/check.js
 import * as lockfile from "../src/lockfile/io.js";
 import { introspect } from "../src/mcp/introspect.js";
 import { findOpencodeToken } from "../src/mcp/opencode-auth.js";
+import { readOpencodeStatuses } from "../src/mcp/opencode-status.js";
 import { toSnapshot } from "../src/mcp/snapshot.js";
 import { checkProviders, writeProviders } from "../src/providers/write.js";
 import * as ui from "../src/ui/prompts.js";
 
+vi.mock("../src/mcp/opencode-status.js", () => ({ readOpencodeStatuses: vi.fn() }));
 vi.mock("../src/mcp/introspect.js", () => ({ introspect: vi.fn() }));
 // Source/update integration is covered in update.test.ts; this suite isolates
 // local integrity, baseline acceptance and MCP observations.
@@ -272,6 +274,27 @@ describe("check", () => {
     expect(projectState()).toEqual(before);
   });
 
+  it.each(["connected", "needs_auth", undefined])("reports V2 status %s without accepting a tool or config baseline", async (status) => {
+    const { root, config } = setup();
+    const prior = lockfile.readLockfile(repoDir)!.entries["mcp:alpha"];
+    config.mcpServers!.alpha = { transport: "http", url: "https://changed.example.test" };
+    writeFileSync(join(root, "config.json"), JSON.stringify(config));
+    vi.mocked(introspect).mockResolvedValue({ ok: false, reason: "HTTP 401", authRequired: true });
+    vi.mocked(readOpencodeStatuses).mockReturnValue(new Map(status ? [["alpha", status]] : []));
+    await check(options({ positionals: ["mcp:alpha"], accept: true, opencodeStatus: true }));
+    expect(output()).toMatchObject({ complete: false, accepted: [], mcp: [{ baseline: "present", status: "skipped" }] });
+    const report = output().mcp[0];
+    expect(report.opencodeStatus).toEqual({ sameNameStatus: status ?? null, endpointVerified: false });
+    expect(report).not.toHaveProperty("authRequired");
+    expect(report.reason).toContain("same-named OpenCode entry");
+    if (status) {
+      expect(report.reason).toContain(`reports '${status}'`);
+      expect(report.reason).toContain("endpoint is unverified");
+    }
+    expect(report.reason).not.toMatch(/sign in|mcp auth/);
+    expect(lockfile.readLockfile(repoDir)!.entries["mcp:alpha"]).toEqual(prior);
+  });
+
   it("reports observed tool drift without refreshing the stored snapshot", async () => {
     setup();
     vi.mocked(introspect).mockResolvedValue({ ok: true, tools: [{ ...TOOLS[0]!, description: "Changed instructions" }] });
@@ -321,6 +344,7 @@ describe("check", () => {
     expect(output()).toMatchObject({ ok: false, complete: false, status: "incomplete" });
     expect(output().mcp).toEqual([expect.objectContaining({ status: "skipped", intentional: false, authRequired: true })]);
     expect(projectState()).toEqual(before);
+    expect(readOpencodeStatuses).not.toHaveBeenCalled();
     expect(process.exitCode).toBe(1);
   });
 
@@ -749,9 +773,7 @@ describe("summarize", () => {
 
 describe("authHint", () => {
   it("suggests the initial opencode auth when no token exists", () => {
-    expect(authHint("none", "linear")).toBe(
-      "requires OAuth — run 'opencode mcp auth linear', then 'quiver-cli check'",
-    );
+    expect(authHint("none", "linear")).toContain("On V2 use --opencode-status");
   });
 
   it("suggests re-auth for expired tokens", () => {

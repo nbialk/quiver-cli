@@ -11,6 +11,7 @@ import { parseEntryId } from "../lockfile/schema.js";
 import { diffSnapshots, isEmptyDiff, type ToolDiff } from "../mcp/diff.js";
 import { introspect } from "../mcp/introspect.js";
 import { findOpencodeToken } from "../mcp/opencode-auth.js";
+import { readOpencodeStatuses } from "../mcp/opencode-status.js";
 import { toSnapshot } from "../mcp/snapshot.js";
 import { assertSafeMutationPath } from "../path.js";
 import { checkDependency, dependencyLabel, type DependencyReport } from "../plugins/check.js";
@@ -40,6 +41,7 @@ interface McpReport {
   intentional?: boolean;
   reason?: string;
   authRequired?: boolean;
+  opencodeStatus?: { sameNameStatus: string | null; endpointVerified: false };
   diff?: ToolDiff;
   tokens?: number;
 }
@@ -115,7 +117,7 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
   const unsafe = local.unsafe.filter((item) => selected.has(item.id));
   const acceptanceBlocked = options.accept && (missing.length > 0 || unsafe.length > 0);
   const accepting = options.accept && !acceptanceBlocked;
-  const accepted = accepting ? [...selected] : [];
+  const accepted = new Set(accepting ? selected : []);
   const drift = local.drift.filter((item) => selected.has(item.id) && !accepting);
   const skillDrift = drift.filter((item) => item.kind === "content");
   const configDrift = drift.filter((item) => item.kind === "config");
@@ -162,6 +164,7 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
   progress.clear();
   if (!options.json) await ui.info("Local file and provider checks complete.");
 
+  let statuses: Map<string, string> | undefined;
   const mcpReports: McpReport[] = [];
   const disabled = disabledMcpServers(options.targetRoot);
   const initialLocalDigest = accepting
@@ -174,13 +177,15 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
     const p = parseEntryId(id)!;
     const catMcp = mcpByName.get(p.name);
     if (!catMcp) continue;
-    if (accepting && entry.configDigest !== catMcp.configDigest) {
+    const configChanging = accepting && entry.configDigest !== catMcp.configDigest;
+    const resetChangedBaseline = () => {
+      if (!configChanging) return;
       // Tools and auth observations belong to the configuration they came from.
       entry.tools = null;
       entry.toolsFetchedAt = null;
       delete entry.authRequired;
-    }
-    const baseline = entry.tools ? "present" : "missing";
+    };
+    const baseline = entry.tools && !configChanging ? "present" : "missing";
     const skipReason = options.offline
       ? "offline"
       : disabled.has(p.name)
@@ -189,6 +194,7 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
           ? "stdio server skipped (pass --introspect-stdio to run it)"
           : null;
     if (skipReason || acceptanceBlocked) {
+      resetChangedBaseline();
       if (!options.json && !skipReason) await ui.warn(`${id}: acceptance blocked by missing or unsafe local content`);
       mcpReports.push({
         id,
@@ -218,6 +224,27 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
     }
     progress.clear();
     if (!res.ok) {
+      if (options.opencodeStatus && server.transport === "http" && res.authRequired) {
+        statuses ??= readOpencodeStatuses(options.targetRoot);
+        const status = statuses.get(p.name);
+        const reason = status
+          ? `The same-named OpenCode entry in this project reports '${status}'. ` +
+            "The status API does not return its URL or tool schemas; the endpoint is unverified and the snapshot is incomplete."
+          : "Direct HTTP authorization rejected. No status was available for a same-named OpenCode entry in this project. Snapshot incomplete.";
+        if (accepting) {
+          // Do not pair an old tool baseline with a newly accepted config.
+          accepted.delete(id);
+          if (entry.configDigest !== catMcp.configDigest) configDrift.push({ id, kind: "config" });
+        }
+        if (!options.json) await ui.warn(`${id}: ${reason}`);
+        mcpReports.push({
+          id, status: "skipped", intentional: false, reason,
+          opencodeStatus: { sameNameStatus: status ?? null, endpointVerified: false },
+          baseline: entry.tools ? "present" : "missing",
+        });
+        continue;
+      }
+      resetChangedBaseline();
       if (accepting && res.authRequired) entry.authRequired = true;
       const reason = res.authRequired ? authHint(cred.status, p.name) : res.reason;
       if (!options.json) await ui.warn(`${id}: ${reason}`);
@@ -232,6 +259,7 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
       continue;
     }
 
+    resetChangedBaseline();
     const current = toSnapshot(res.tools);
     const tokens = Object.values(current).reduce((sum, tool) => sum + (tool.tokens ?? 0), 0);
     const diff = entry.tools ? diffSnapshots(entry.tools, current) : undefined;
@@ -268,7 +296,7 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
   });
   progress.clear();
 
-  if (accepting && selected.size) {
+  if (accepting && accepted.size) {
     try {
       assertSafeMutationPath(options.targetRoot, lockfilePath(options.targetRoot), "Lockfile");
       const currentLock = readLockfile(options.targetRoot);
@@ -287,7 +315,7 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
           `Retry \`quiver-cli check ${target ?? "--all"} --accept\` after other edits finish.`,
       );
     }
-    acceptLocalEntries(catalog, lock, selected);
+    acceptLocalEntries(catalog, lock, accepted);
     writeLockfile(options.targetRoot, lock);
   }
 
@@ -319,7 +347,7 @@ const runCheck = async (options: CliOptions, progress: ui.Progress): Promise<voi
     configDrift,
     missing,
     unsafe,
-    accepted,
+    accepted: [...accepted],
     acceptanceBlocked,
     pluginRequirements,
     pluginDependencies,
@@ -402,7 +430,7 @@ const report = async (
     );
   }
 
-  for (const r of mcpReports.filter((item) => item.baseline === "missing")) {
+  for (const r of mcpReports.filter((item) => item.baseline === "missing" && !item.opencodeStatus)) {
     await ui.warn(
       `${r.id}: no recorded tool baseline. Run \`quiver-cli check ${r.id} --accept\` to record a snapshot.`,
     );
@@ -559,10 +587,8 @@ export const authHint = (
   cred: "ok" | "expired" | "none",
   name: string,
 ): string => {
-  const reauth = `run 'opencode mcp auth ${name}', then 'quiver-cli check'`;
-  if (cred === "expired") return `OAuth token expired — re-${reauth}`;
-  if (cred === "ok") return `OAuth token rejected — re-${reauth}`;
-  return `requires OAuth — ${reauth}`;
+  const detail = cred === "expired" ? "V1 OAuth token expired" : cred === "ok" ? "V1 OAuth token rejected" : "Direct HTTP authorization rejected";
+  return `${detail}. On V2 use --opencode-status to check the same-named project entry; on V1 use 'opencode mcp auth ${name}'.`;
 };
 
 const truncate = (s: string, max = 120): string =>

@@ -80,7 +80,8 @@ const buildPlan = (
     : [...PROVIDERS];
   const planByProvider: Record<Provider, ProviderPlan> = {
     claude: planClaude(inputs),
-    opencode: planOpenCode(inputs),
+    // A deselected provider may clean up only marker-owned TUI settings.
+    opencode: planOpenCode(active.includes("opencode") ? inputs : { ...inputs, tuiConfig: null }),
     codex: planCodex(inputs),
   };
   const plans: ProviderPlan[] = [];
@@ -141,6 +142,9 @@ export const writeProviders = (
     (n) => skipped.add(n),
   );
   const result = applyOutputs(plan);
+  if (catalog.config.tui && (!lock.providers?.length || lock.providers.includes("opencode"))) {
+    console.warn("OpenCode: .opencode/tui.json applies to V1. V2 uses global CLI settings in $XDG_CONFIG_HOME/opencode/cli.json (default ~/.config/opencode/cli.json).");
+  }
   if (missing.size) {
     console.warn(
       `Warning: unset env vars left un-interpolated: ${[...missing].join(", ")}. ` +

@@ -30,3 +30,9 @@ jobs:
       - run: pnpm test
 
       - run: pnpm build
+
+      - name: Smoke test generated configs with OpenCode V2
+        if: matrix.node-version == 24
+        run: |
+          npm install --global @opencode/cli@2.3.2
+          node .github/smoke/opencode-v2.mjs
