@@ -146,9 +146,14 @@ A missing baseline on a queried server, detected drift or an authentication
 failure produces a nonzero exit code.
 
 Stdio introspection requires `--introspect-stdio`, which permits running foreign
-code. For OAuth-protected HTTP servers, Quiver can reuse OpenCode credentials
-read-only; it does not refresh them. Authenticate with `opencode mcp auth <name>`,
-review with `check`, then explicitly accept the snapshot. `inspect <name>` shows
+code. For OAuth-protected HTTP servers, Quiver can reuse OpenCode V1 credentials
+read-only; it does not refresh them (`opencode mcp auth <name>` on V1).
+On V2, `check mcp:<name> --opencode-status` can distinguish a connected server
+from one needing sign-in after direct HTTP authorization fails. This opts into
+opening the project in OpenCode, which may start plugins and local MCP servers.
+Sign in via `/mcps` only if OpenCode reports authentication is needed. OpenCode
+2.3.2 exposes connection status, not tool schemas: status alone leaves the
+snapshot incomplete and cannot replace a baseline, even with `--accept`. `inspect <name>` shows
 recorded MCP tools, descriptions and estimated token cost without a source fetch.
 
 ## Source Updates
@@ -214,7 +219,7 @@ content, not the discovery catalog or a live remote source.
 | Skills | `.opencode/skills/*` links | `.claude/skills/*` links | native `.agents/skills` |
 | Commands | `.opencode/commands/*` | `.claude/commands/*` links | not supported |
 | MCP | `opencode.json` | `.mcp.json` | `.codex/config.toml` |
-| Settings | `.opencode/tui.json` | `.claude/settings.json` | none |
+| Settings | `.opencode/tui.json` (V1 only) | `.claude/settings.json` | none |
 | Plugins | `.opencode/plugins/*` links | none | none |
 | Guide | `AGENTS.md` link | `CLAUDE.md` link | native `AGENTS.md` |
 
@@ -228,8 +233,10 @@ regenerates output, cleaning deselected providers. `sync` uses that selection;
 it no longer accepts `--providers`.
 
 `.agents/config.json` holds MCP/plugin definitions and provider overlays:
-`opencode` merges into `opencode.json`, `tui` becomes `.opencode/tui.json`,
+`opencode` merges into `opencode.json`, `tui` becomes `.opencode/tui.json` for V1,
 `claude.settings` becomes `.claude/settings.json`, and `shared` stays local.
+OpenCode V2 reads global CLI settings from `$XDG_CONFIG_HOME/opencode/cli.json`
+(default `~/.config/opencode/cli.json`); Quiver does not write this file.
 The catalog's `plugin:rtk` adapter requires RTK installed separately; `check`
 verifies its binary is on `PATH`. Plugin results from `update` explicitly refer
 to the **adapter source**, not the external binary. JSON update reports mark

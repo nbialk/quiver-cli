@@ -167,6 +167,7 @@ describe("parse", () => {
     ["check", "demo", "--all"],
     ["check", "--dry-run"],
     ["check", "--offline", "--introspect-stdio"],
+    ["check", "--offline", "--opencode-status"],
     ["sync", "--providers=claude"],
     ["sync", "--json"],
     ["remove", "demo", "--json"],

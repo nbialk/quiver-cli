@@ -16,6 +16,7 @@ export interface CliOptions {
   /** From --dry-run - report what would change without writing (update). */
   dryRun: boolean;
   introspectStdio: boolean;
+  opencodeStatus?: boolean;
   /** From --providers=a,b - validated by the consuming command. */
   providers: string[] | null;
   /** From --catalog=<source> - catalog source for init. */
@@ -67,6 +68,8 @@ Options:
                        github:owner/repo[/path][#ref] or local:/absolute/path
   --name=<alias>       Set the installed name for a direct GitHub add
   --introspect-stdio   Allow introspecting stdio MCP servers (runs foreign code)
+  --opencode-status    On HTTP auth failure, query OpenCode V2 project status
+                       (may start project plugins and MCP servers)
   -h, --help           Show help without running a command
   -v, --version        Show the quiver-cli version
 
@@ -85,6 +88,7 @@ const KNOWN_FLAGS = new Set([
   "--offline",
   "--dry-run",
   "--introspect-stdio",
+  "--opencode-status",
 ]);
 
 const FLAG_ALIASES: Record<string, string> = {
@@ -104,7 +108,7 @@ const COMMAND_FLAGS: Record<string, string[]> = {
   update: ["--force", "--yes", "--json", "--dry-run", "--source"],
   list: ["--json", "--verbose"],
   inspect: ["--json", "--verbose"],
-  check: ["--all", "--json", "--verbose", "--accept", "--offline", "--introspect-stdio"],
+  check: ["--all", "--json", "--verbose", "--accept", "--offline", "--introspect-stdio", "--opencode-status"],
   migrate: ["--json", "--dry-run"],
   help: ["--json"],
   version: ["--json", "--offline"],
@@ -174,6 +178,7 @@ export const parse = (
   options.accept = flags.has("--accept");
   options.offline = flags.has("--offline");
   options.dryRun = flags.has("--dry-run");
+  options.opencodeStatus = flags.has("--opencode-status");
   options.introspectStdio = flags.has("--introspect-stdio");
   options.catalog = flags.get("--catalog") ?? null;
   options.source = flags.get("--source") ?? null;
@@ -219,6 +224,7 @@ export const parse = (
   if (options.accept && !count && !options.all) {
     throw cliError("usage", "--accept requires an installed id or --all.");
   }
+  if (options.offline && options.opencodeStatus) throw cliError("usage", "--offline cannot be combined with --opencode-status.");
   if (options.offline && options.introspectStdio) {
     throw cliError("usage", "--offline cannot be combined with --introspect-stdio.");
   }
