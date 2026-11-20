@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/nbialk/quiver-cli/compare/v2.3.0...v2.3.1) (2026-11-20)
+
+
+### Documentation
+
+* **opencode:** record the V2 compatibility plan ([9b9b30c](https://github.com/nbialk/quiver-cli/commit/9b9b30c08833472a6b122c78cd4a0bb3c8104c1a))
+
 ## [2.3.0](https://github.com/nbialk/quiver-cli/compare/v2.2.0...v2.3.0) (2026-09-10)
 
 
