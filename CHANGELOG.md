@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.0](https://github.com/nbialk/quiver-cli/compare/v2.3.0...v2.4.0) (2026-11-23)
+
+
+### Features
+
+* **check:** report OpenCode V2 MCP connection status with --opencode-status ([651477a](https://github.com/nbialk/quiver-cli/commit/651477af66c616aabac9172a84c55bb58750367a))
+
+
+### Documentation
+
+* **opencode:** record the V2 compatibility plan ([9b9b30c](https://github.com/nbialk/quiver-cli/commit/9b9b30c08833472a6b122c78cd4a0bb3c8104c1a))
+
 ## [2.3.0](https://github.com/nbialk/quiver-cli/compare/v2.2.0...v2.3.0) (2026-09-10)
 
 
